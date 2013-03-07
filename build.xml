@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+
+<project name="rainbow"
+	 default="all"
+	 basedir=".">
+
+  <property name="version.number" value="0.0.1"/>
+
+  <property name="deps.dir" value="deps"/>
+
+  <property name="src.dir" value="src"/>
+
+  <property name="build.dir" value="build"/>
+  <property name="build.classes.dir" value="${build.dir}/classes"/>
+  <property name="build.lib.dir" value="${build.dir}/lib"/>
+
+  <path id="classpath">
+    <pathelement location="${deps.dir}/niosax-10.7.jar"/>
+  </path>
+
+  <target name="prepare">
+    <mkdir dir="${build.dir}"/>
+    <mkdir dir="${build.classes.dir}"/>
+    <mkdir dir="${build.lib.dir}"/>
+  </target>
+
+  <target name="clean"
+	  description="deletes all build files (classes and libs)">
+    <delete dir="${build.classes.dir}"/>
+    <delete dir="${build.lib.dir}"/>
+  </target>
+
+  <target name="bump-build-number"
+	  description="increments the build number">
+    <buildnumber/>
+  </target>
+
+  <target name="compile"
+	  depends="prepare,bump-build-number"
+	  description="compiles all code">
+    <javac srcdir="${src.dir}"
+	   destdir="${build.classes.dir}"
+	   deprecation="true"
+	   debug="true"
+	   debuglevel="source,lines"
+	   source="1.6"
+	   target="1.6"
+	   includeantruntime="false">
+      <compilerarg value="-Xlint"/>
+      <include name="**"/>
+      <classpath>
+	<path refid="classpath"/>
+      </classpath>
+     </javac>
+  </target>
+
+  <target name="package"
+	  depends="compile"
+	  description="packages all classes into a jar file">
+    <jar destfile="${build.lib.dir}/rainbow.jar"
+	 basedir="${build.classes.dir}">
+      <manifest>
+	<attribute name="Built-By" value="${user.name}"/>
+	<attribute name="Implementation-Version"
+		   value="${version.number}-b${build.number}"/>
+      </manifest>
+    </jar>
+  </target>
+
+  <target name="all"
+	  depends="clean,package"
+	  description="cleans, then builds everything"/>
+
+</project>
