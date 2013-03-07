@@ -6,16 +6,18 @@ import org.w3c.dom.Element;
 
 public class DomReader
 {
-    private Document document;
-
     private boolean empty_string_is_a_value;
 
     private Element current_element;
 
+    public DomReader (Element element)
+    {
+	empty_string_is_a_value = false;
+	current_element = element;
+    }
+
     public DomReader (Document document)
     {
-	this.document = document;
-
 	empty_string_is_a_value = false;
 	current_element = document.getDocumentElement ();
     }
