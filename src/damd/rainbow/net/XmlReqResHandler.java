@@ -108,8 +108,8 @@ public class XmlReqResHandler
 
     // >>> SocketHandler
 
-    public synchronized void open (SocketListener listener,
-				   SocketChannel channel)
+    public synchronized void open (SocketChannel channel,
+				   SocketListener listener)
 	throws IOException
     {
 	if (null != worker)
@@ -127,11 +127,15 @@ public class XmlReqResHandler
 	{
 	    StringBuilder name = new StringBuilder ();
 
-	    name.append ("listener(");
-	    name.append (listener.toString ());
-	    name.append ("), channel(");
+	    name.append ("channel(");
 	    name.append (channel.toString ());
 	    name.append (")");
+
+	    if (null != listener) {
+		name.append (", listener(");
+		name.append (listener.toString ());
+		name.append (")");
+	    }
 
 	    logger = Logger.getLogger (getClass ().getName ()
 				       + "#"

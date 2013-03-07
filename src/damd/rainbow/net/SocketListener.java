@@ -117,7 +117,7 @@ public class SocketListener
 		}
 
 		try {
-		    handler.open (this, schannel);
+		    handler.open (schannel, this);
 		} catch (Exception x) {
 		    logger.log (Level.SEVERE,
 				"While opening SocketHandler("
@@ -128,7 +128,7 @@ public class SocketListener
 		}
 	    }
 	} catch (AsynchronousCloseException x) {
-	    // swallow
+	    // Requested to stop (see changeState), swallow
 	} catch (IOException x) {
 	    logger.log (Level.SEVERE,
 			"While waiting to accept a connection",
