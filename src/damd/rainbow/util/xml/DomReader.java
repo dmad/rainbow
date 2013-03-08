@@ -3,6 +3,10 @@ package damd.rainbow.util.xml;
 import org.w3c.dom.Node;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.DOMConfiguration;
+
+import org.w3c.dom.ls.DOMImplementationLS;
+import org.w3c.dom.ls.LSSerializer;
 
 public class DomReader
 {
@@ -39,6 +43,28 @@ public class DomReader
 	    : (string.isEmpty ()
 	       ? empty_string_is_a_value
 	       : true);
+    }
+
+    public String serialize ()
+    {
+	String xml = null;
+	Document doc;
+
+	if (null != (doc = current_element.getOwnerDocument ())) {
+	    DOMImplementationLS dom_impl;
+	    DOMConfiguration dom_conf;
+	    LSSerializer serializer;
+
+	    dom_impl = (DOMImplementationLS) doc.getImplementation ();
+	    serializer = dom_impl.createLSSerializer ();
+	    dom_conf = serializer.getDomConfig ();
+	    dom_conf.setParameter ("format-pretty-print", true);
+	    dom_conf.setParameter ("xml-declaration", false);
+
+	    xml = serializer.writeToString (current_element);
+	}
+
+	return xml;
     }
 
     public String getName ()
@@ -92,21 +118,54 @@ public class DomReader
 	    throw new IllegalStateException ();
     }
 
-    public boolean moveToFirstNamedChild (String name, boolean mandatory)
+    public boolean moveToChild (boolean mandatory)
 	throws XmlMissingElementException
     {
 	boolean found = false;
 
 	for (Node child = current_element.getFirstChild ();
 	     !found && null != child;
-	     child = child.getNextSibling ()) {
+	     child = child.getNextSibling ())
+	    if (found = (Node.ELEMENT_NODE == child.getNodeType ()))
+		current_element = (Element) child;
+
+	if (mandatory && !found)
+	    throw new XmlMissingElementException (current_element, "[child]");
+
+	return found;
+    }
+
+    public boolean moveToNext (boolean mandatory)
+	throws XmlMissingElementException
+    {
+	boolean found = false;
+
+	for (Node sibling = current_element.getNextSibling ();
+	     !found && null != sibling;
+	     sibling = sibling.getNextSibling ())
+	    if (found = (Node.ELEMENT_NODE == sibling.getNodeType ()))
+		current_element = (Element) sibling;
+
+	if (mandatory && !found)
+	    throw new XmlMissingElementException (current_element, "[next]");
+
+	return found;
+    }
+
+    public boolean moveToNamedChild (String name, boolean mandatory)
+	throws XmlMissingElementException
+    {
+	boolean found = false;
+
+	for (Node child = current_element.getFirstChild ();
+	     !found && null != child;
+	     child = child.getNextSibling ())
 	    if (Node.ELEMENT_NODE == child.getNodeType ()) {
 		String child_name = child.getNodeName ();
 
-		if (found = name.equals (child_name))
+		if (found = name.equals (child.getNodeName ()))
 		    current_element = (Element) child;
 	    }
-	}
 
 	if (mandatory && !found)
 	    throw new XmlMissingElementException (current_element, name);
@@ -114,20 +173,19 @@ public class DomReader
 	return found;
     }
 
-    public boolean moveToNextNamedSibling (boolean mandatory)
+    public boolean moveToNextNamed (boolean mandatory)
 	throws XmlMissingElementException
     {
 	boolean found = false;
 
 	for (Node sibling = current_element.getNextSibling ();
 	     !found && null != sibling;
-	     sibling = sibling.getNextSibling ()) {
+	     sibling = sibling.getNextSibling ())
 	    if (Node.ELEMENT_NODE == sibling.getNodeType ()) {
 		if (found = (current_element.getNodeName ()
 			     .equals (sibling.getNodeName ())))
 		    current_element = (Element) sibling;
 	    }
-	}
 
 	if (mandatory && !found)
 	    throw new XmlMissingElementException

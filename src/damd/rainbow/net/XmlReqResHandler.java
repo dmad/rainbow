@@ -30,7 +30,8 @@ import org.xml.sax.Attributes;
 import org.xml.sax.ContentHandler;
 
 import damd.rainbow.util.xml.XmlException;
-import damd.rainbow.util.xml.Xml;
+import damd.rainbow.util.xml.DomBuilder;
+import damd.rainbow.util.xml.DomReader;
 
 import uk.org.retep.niosax.NioSaxParserFactory;
 import uk.org.retep.niosax.NioSaxParser;
@@ -103,7 +104,7 @@ public class XmlReqResHandler
     public void write (final Document stanza)
     {
 	if (null != stanza)
-	    write (Xml.serialize (stanza.getDocumentElement ()));
+	    write (new DomReader (stanza).serialize ());
     }
 
     // >>> SocketHandler
@@ -173,14 +174,11 @@ public class XmlReqResHandler
     {
 	private StringBuilder element_characters;
 
-	private Document current_stanza;
-	private Element current_stanza_element;
+	private DomBuilder stanza;
 
 	public void startElement (String uri, String local_name,
 				  String name, Attributes attrs)
 	{
-	    Element new_element = null;
-
 	    element_characters.setLength (0);
 
 	    switch (stream_state) {
@@ -190,26 +188,18 @@ public class XmlReqResHandler
 		    : StreamState.INVALID;
 		break;
 	    case OPEN:
-		if (null == current_stanza) {
+		if (null == stanza) {
 		    try {
-			current_stanza = Xml.newDocument ();
+			stanza = new DomBuilder (name);
 		    } catch (XmlException x) {
 			// TODO: handleException (x);
 		    }
-		}
-
-		new_element = current_stanza.createElement (name);
-
-		if (null != current_stanza_element)
-		    current_stanza_element.appendChild (new_element);
-		else
-		    current_stanza.appendChild (new_element);
-
-		current_stanza_element = new_element;
+		} else
+		    stanza.addChildElement (name);
 
 		if (null != attrs && attrs.getLength () > 0)
 		    for (int a = 0;a < attrs.getLength ();++a)
-			current_stanza_element.setAttribute
+			stanza.addAttribute
 			    (attrs.getLocalName (a),
 			     attrs.getValue (a));
 		break;
@@ -230,33 +220,26 @@ public class XmlReqResHandler
 
 	    element_characters.setLength (0);
 
+
 	    switch (stream_state) {
 	    case OPEN:
-		if (null == current_stanza) {
+		if (null == stanza) {
 		    delegate.closeStream ();
 		    stream_state = StreamState.CLOSING;
 		} else {
-		    if (null != data) {
-			Text text = current_stanza.createTextNode (data);
+		    if (!(stanza.getName ().equals (name))) {
+			logger.warning ("Unbalanced element found");
+			stream_state = StreamState.INVALID;
+		    } else {
+			if (null != data)
+			    stanza.addText (data);
 
-			current_stanza_element.appendChild (text);
-		    }
-
-		    Node parent = current_stanza_element.getParentNode ();
-
-		    switch (parent.getNodeType ()) {
-		    case Node.DOCUMENT_NODE:
-			current_stanza_element = null;
-			delegate.handleStanza (current_stanza);
-			current_stanza = null;
-			break;
-		    case Node.ELEMENT_NODE:
-			current_stanza_element = (Element) parent;
-			break;
-		    default:
-			throw new IllegalStateException ("Invalid node type("
-							 + parent.getNodeType ()
-							 + ")");
+			if (stanza.hasParent ())
+			    stanza.moveToParent ();
+			else {
+			    delegate.handleStanza (stanza.getDocument ());
+			    stanza = null;
+			}
 		    }
 		}
 		break;
@@ -277,8 +260,7 @@ public class XmlReqResHandler
 	{
 	    element_characters = new StringBuilder ();
 
-	    current_stanza = null;
-	    current_stanza_element = null;
+	    stanza = null;
 	}
 
 	public void endDocument () {}

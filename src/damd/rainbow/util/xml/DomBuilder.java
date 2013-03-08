@@ -38,6 +38,8 @@ public class DomBuilder
     private Document document;
     private Element current_element;
 
+    private boolean cascade_next_element;
+
     private Queue<Element> bookmarks;
 
     public DomBuilder (String name)
@@ -48,6 +50,8 @@ public class DomBuilder
 	current_element = document.createElement (name);
 	document.appendChild (current_element);
 
+	cascade_next_element = true;
+
 	bookmarks = new ArrayDeque<Element> ();
     }
 
@@ -56,14 +60,28 @@ public class DomBuilder
 	return document;
     }
 
-    public void push ()
+    public String getName ()
     {
-	bookmarks.add (current_element);
+	return current_element.getTagName ();
     }
 
-    public void pop ()
+    public String serialize ()
+    {
+	return new DomReader (document).serialize ();
+    }
+
+    public DomBuilder push ()
+    {
+	bookmarks.add (current_element);
+
+	return this;
+    }
+
+    public DomBuilder pop ()
     {
 	current_element = bookmarks.remove ();
+
+	return this;
     }
 
     public DomBuilder addAttribute (String name, String value)
@@ -91,12 +109,33 @@ public class DomBuilder
 	current_element.appendChild (child);
 	current_element = child;
 
+	cascade_next_element = false;
+
 	return this;
     }
 
-    public DomBuilder addSiblingElement (String name)
+    public DomBuilder cascadeNextElement (boolean cascade)
     {
-	return moveToParent ().addChildElement (name);
+	cascade_next_element = cascade;
+
+	return this;
+    }
+
+    public DomBuilder addElement (String name)
+    {
+	if (cascade_next_element)
+	    addChildElement (name);
+	else
+	    moveToParent ().addChildElement (name);
+
+	return this;
+    }
+
+    public boolean hasParent ()
+    {
+	Node pnode = current_element.getParentNode ();
+
+	return Node.ELEMENT_NODE == pnode.getNodeType ();
     }
 
     public DomBuilder moveToParent ()
