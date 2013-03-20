@@ -422,7 +422,11 @@ public class XmlReqResHandler
 		if (channel_selector.select () > 0) {
 		    if (0 != (selection_key.readyOps ()
 			      & SelectionKey.OP_READ)) {
-			if (channel.read (input_buffer) > 0) {
+			int read = channel.read (input_buffer);
+
+			if (read < 0) // end of stream
+			    stream_state = StreamState.CLOSED;
+			else if (read > 0) {
 			    input_buffer.flip ();
 			    try {
 				parser.parse (source);
