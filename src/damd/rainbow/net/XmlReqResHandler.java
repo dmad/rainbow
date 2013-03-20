@@ -49,6 +49,8 @@ public class XmlReqResHandler
 	public void closeStream ();
 
 	public void handleStanza (Document stanza);
+
+	public void cleanup ();
     }
 
     private enum StreamState
@@ -334,6 +336,8 @@ public class XmlReqResHandler
 				x);
 		}
 	    }
+
+	    delegate.cleanup ();
 
 	    output_encoder = null;
 
