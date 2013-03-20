@@ -461,7 +461,11 @@ public class ConnectionPool
 		addConnections (initial_capacity);
 
 		if (null == worker)
-		    worker = new Thread (this);
+		    worker = new Thread (this,
+					 this.getClass ().getName ()
+					 + "("
+					 + name
+					 + ")");
 
 		switch (worker.getState ()) {
 		case NEW:
