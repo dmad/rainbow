@@ -37,13 +37,13 @@ import uk.org.retep.niosax.NioSaxParserFactory;
 import uk.org.retep.niosax.NioSaxParser;
 import uk.org.retep.niosax.NioSaxSource;
 
-public class XmlReqResHandler
+public class XmlStanzaHandler
     implements
 	SocketHandler
 {
     public interface Delegate
     {
-	public void setDelegator (XmlReqResHandler delegator);
+	public void setDelegator (XmlStanzaHandler delegator);
 
 	public boolean openStream (String name, Attributes attrs);
 	public void closeStream ();
@@ -79,7 +79,7 @@ public class XmlReqResHandler
 					 in worker thread, so no sync
 					 needed ! */
 
-    public XmlReqResHandler (Delegate delegate)
+    public XmlStanzaHandler (Delegate delegate)
     {
 	logger = Logger.getLogger (getClass ().getName ());
 
@@ -285,7 +285,7 @@ public class XmlReqResHandler
     private class WorkerThread
 	implements Runnable
     {
-	private XmlReqResHandler parent;
+	private XmlStanzaHandler parent;
 
 	private NioSaxParser parser;
 	private NioSaxSource source;
@@ -297,7 +297,7 @@ public class XmlReqResHandler
 
 	private SelectionKey selection_key;
 
-	public WorkerThread (XmlReqResHandler parent)
+	public WorkerThread (XmlStanzaHandler parent)
 	{
 	    this.parent = parent;
 	}
