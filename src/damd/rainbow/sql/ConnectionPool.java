@@ -299,7 +299,7 @@ public class ConnectionPool
 
 	ConnectionProxy proxy = null;
 
-	while (null != proxy) { /* as long as we have connections
+	while (null == proxy) { /* as long as we have connections
 				   (or can make extra) */
 	    if (available_connections.isEmpty ()) {
 		int increment = capacity_increment;
