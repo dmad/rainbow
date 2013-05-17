@@ -1,4 +1,4 @@
-package damd.rainbow.util.xml;
+package damd.rainbow.xml;
 
 import java.util.Queue;
 import java.util.ArrayDeque;

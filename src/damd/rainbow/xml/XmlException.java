@@ -1,4 +1,4 @@
-package damd.rainbow.util.xml;
+package damd.rainbow.xml;
 
 import javax.xml.parsers.ParserConfigurationException;
 

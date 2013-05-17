@@ -1,4 +1,4 @@
-package damd.rainbow.util.logging;
+package damd.rainbow.logging;
 
 import java.util.Date;
 

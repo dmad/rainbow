@@ -29,9 +29,9 @@ import org.xml.sax.Locator;
 import org.xml.sax.Attributes;
 import org.xml.sax.ContentHandler;
 
-import damd.rainbow.util.xml.XmlException;
-import damd.rainbow.util.xml.DomBuilder;
-import damd.rainbow.util.xml.DomReader;
+import damd.rainbow.xml.XmlException;
+import damd.rainbow.xml.DomBuilder;
+import damd.rainbow.xml.DomReader;
 
 import uk.org.retep.niosax.NioSaxParserFactory;
 import uk.org.retep.niosax.NioSaxParser;
