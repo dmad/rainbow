@@ -44,8 +44,6 @@ public class ConnectionPool
 
     private Thread worker;
 
-    private String test_sql;
-
     public ConnectionPool (String name)
     {
 	if (null == name)
@@ -244,13 +242,6 @@ public class ConnectionPool
 	capacity_increment = increment;
     }
 
-    public synchronized void setTestSql (String test_sql)
-    {
-	checkState (State.STOPPED);
-
-	this.test_sql = test_sql;
-    }
-
     public synchronized String getName ()
     {
 	return name;
@@ -273,6 +264,34 @@ public class ConnectionPool
 	}
     }
 
+    private void discardConnection (Connection conn)
+    {
+	if (null != conn) {
+	    try {
+		conn.close ();
+	    } catch (Exception x) {
+		logger.log (Level.WARNING, "While discarding connection", x);
+	    }
+	}
+    }
+
+    private boolean isConnectionValid (Connection conn)
+    {
+	boolean valid = false;
+
+	if (null != conn) {
+	    try {
+		valid = conn.isValid (10);
+	    } catch (SQLException x) {
+		logger.log (Level.WARNING,
+			    " While testing if a connection is valid",
+			    x);
+	    }
+	}
+
+	return valid;
+    }
+
     public synchronized Connection getConnection ()
 	throws SQLException
     {
@@ -280,7 +299,8 @@ public class ConnectionPool
 
 	ConnectionProxy proxy = null;
 
-	while (null == proxy) {
+	while (null != proxy) { /* as long as we have connections
+				   (or can make extra) */
 	    if (available_connections.isEmpty ()) {
 		int increment = capacity_increment;
 		int allowable = maximum_capacity - used_connections.size ();
@@ -296,39 +316,19 @@ public class ConnectionPool
 		    increment = allowable;
 
 		addConnections (increment);
-	    }
+	    } else {
+		Connection conn = available_connections.remove (0);
 
-	    proxy = new ConnectionProxy (this,
-					 available_connections.remove (0));
-
-	    if (null != test_sql) {
-		try {
-		    Statement stmt = null;
-
-		    try {
-			stmt = proxy.createStatement ();
-			stmt.execute (test_sql);
-		    } finally {
-			if (null != stmt) {
-			    try {
-				stmt.close ();
-			    } catch (SQLException x) {
-				// swallow
-			    }
-			}
-		    }
-		} catch (SQLException x) {
-		    proxy = null;
-		    logger.log (Level.WARNING,
-				"While testing a connection"
-				+ ", removing it from pool",
-				x);
+		if (isConnectionValid (conn)) {
+		    proxy = new ConnectionProxy (this, conn);
+		    used_connections.add (proxy);
+		} else {
+		    logger.warning ("Connection from pool is invalid"
+				    + ", removing it from pool");
+		    discardConnection (conn);
 		}
 	    }
 	}
-
-	if (null != proxy)
-	    used_connections.add (proxy);
 
 	logger.fine ("Leased a connection (used("
 		     + used_connections.size ()
@@ -424,15 +424,24 @@ public class ConnectionPool
 
     public void run ()
     {
+	boolean running = true;
+
 	logger.fine ("ConnectionPool worker thread has started");
 
-	try {
-	    while (true) {
-		reapConnections ();
-		Thread.sleep (1000);
+	while (running) {
+	    try {
+		while (true) {
+		    reapConnections ();
+		    Thread.sleep (1000);
+		}
+	    } catch (InterruptedException x) {
+		running = false;
+	    } catch (Exception x) {
+		logger.log (Level.SEVERE,
+			    "While in ConnectionPool worker thread run loop"
+			    + ", continuing execution",
+			    x);
 	    }
-	} catch (InterruptedException x) {
-	    // swallow
 	}
 
 	logger.fine ("ConnectionPool worker thread has stopped");
@@ -444,43 +453,44 @@ public class ConnectionPool
 
     public synchronized State currentState ()
     {
-	return available_connections.size () + used_connections.size () > 0
-	    ? State.RUNNING
-	    : State.STOPPED;
+	State state = State.STOPPED;
+
+	if (null != worker)
+	    if (worker.isAlive ())
+		state = State.RUNNING;
+	    else
+		worker = null; /* thread terminated by itself
+				  (or never started) !!! */
+
+	return state;
     }
 
     public synchronized void changeState (State new_state)
 	throws SQLException, InterruptedException
     {
-	if (new_state != currentState ()) {
+	if (currentState () != new_state) {
 	    switch (new_state) {
 	    case RUNNING:
 		if (null == driver)
-		    throw new IllegalStateException (ex_prefix + "No driver defined");
+		    throw new IllegalStateException
+			(ex_prefix + "No driver defined");
 
 		addConnections (initial_capacity);
 
-		if (null == worker)
-		    worker = new Thread (this,
-					 this.getClass ().getName ()
-					 + "("
-					 + name
-					 + ")");
-
-		switch (worker.getState ()) {
-		case NEW:
-		case TERMINATED:
-		    worker.start ();
-		    break;
-		}
+		worker = new Thread (this,
+				     getClass ().getName ()
+				     + "("
+				     + name
+				     + ")");
+		worker.setDaemon (true);
+		worker.start ();
 		break;
 	    case STOPPED:
-		if (null != worker) {
+		while (null != worker && worker.isAlive ()) {
 		    worker.interrupt ();
-		    while (Thread.State.TERMINATED != worker.getState ())
-			Thread.sleep (1000);
-		    worker = null;
+		    Thread.sleep (1000);
 		}
+		worker = null;
 
 		// Reclaim all used connections
 		for (ConnectionProxy p : used_connections) {
@@ -491,13 +501,9 @@ public class ConnectionPool
 		}
 		used_connections.clear ();
 
-		for (Connection c : available_connections) {
-		    try {
-			c.close ();
-		    } catch (SQLException x) {
-			logger.log (Level.SEVERE, null, x);
-		    }
-		}
+		for (Connection c : available_connections)
+		    discardConnection (c);
+
 		available_connections.clear ();
 
 		break;
