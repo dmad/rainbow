@@ -1,6 +1,5 @@
 package damd.rainbow.xml;
 
-import java.util.Queue;
 import java.util.ArrayDeque;
 
 import org.w3c.dom.Node;
@@ -40,7 +39,7 @@ public class DomBuilder
 
     private boolean cascade_next_element;
 
-    private Queue<Element> bookmarks;
+    private ArrayDeque<Element> bookmarks;
 
     public DomBuilder (String name)
 	throws XmlException
@@ -72,14 +71,14 @@ public class DomBuilder
 
     public DomBuilder push ()
     {
-	bookmarks.add (current_element);
+	bookmarks.push (current_element);
 
 	return this;
     }
 
     public DomBuilder pop ()
     {
-	current_element = bookmarks.remove ();
+	current_element = bookmarks.pop ();
 
 	return this;
     }
