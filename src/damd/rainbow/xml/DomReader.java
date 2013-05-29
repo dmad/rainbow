@@ -45,7 +45,7 @@ public class DomReader
 	       : true);
     }
 
-    public String serialize (boolean with_xml_decl)
+    public String serialize ()
     {
 	String xml = null;
 	Document doc;
@@ -59,7 +59,7 @@ public class DomReader
 	    serializer = dom_impl.createLSSerializer ();
 	    dom_conf = serializer.getDomConfig ();
 	    dom_conf.setParameter ("format-pretty-print", true);
-	    dom_conf.setParameter ("xml-declaration", with_xml_decl);
+	    dom_conf.setParameter ("xml-declaration", false);
 
 	    xml = serializer.writeToString (current_element);
 	}

@@ -64,9 +64,9 @@ public class DomBuilder
 	return current_element.getTagName ();
     }
 
-    public String serialize (boolean with_xml_decl)
+    public String serialize ()
     {
-	return new DomReader (document).serialize (with_xml_decl);
+	return new DomReader (document).serialize ();
     }
 
     public DomBuilder push ()
