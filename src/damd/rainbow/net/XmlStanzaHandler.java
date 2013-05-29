@@ -106,7 +106,7 @@ public class XmlStanzaHandler
     public void write (final Document stanza)
     {
 	if (null != stanza)
-	    write (new DomReader (stanza).serialize ());
+	    write (new DomReader (stanza).serialize (false));
     }
 
     // >>> SocketHandler
