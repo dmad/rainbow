@@ -86,7 +86,6 @@ public class XmlStanzaHandler
 	logger = Logger.getLogger (getClass ().getName ());
 
 	this.delegate = delegate;
-	delegate.setDelegator (this);
 
 	write_deque = new ArrayDeque<String> ();
     }
@@ -148,6 +147,8 @@ public class XmlStanzaHandler
 
 	    id = sb.toString ();
 	    logger = Logger.getLogger (getClass ().getName () + "#" + id);
+
+	    delegate.setDelegator (this);
 
 	    {
 		WorkerThread worker_thread;
