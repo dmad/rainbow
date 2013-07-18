@@ -156,7 +156,7 @@ public class XmlStanzaHandler
 		worker = new Thread (worker_thread,
 				     worker_thread.getClass ().getName ()
 				     + "("
-				     + sb.toString ()
+				     + id
 				     + ")");
 	    }
 
