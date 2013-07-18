@@ -64,6 +64,8 @@ public class XmlStanzaHandler
 
     private Logger logger;
 
+    private String id;
+
     private final Delegate delegate;
 
     private SocketListener listener; // sychronized on 'this' for assignment
@@ -87,6 +89,11 @@ public class XmlStanzaHandler
 	delegate.setDelegator (this);
 
 	write_deque = new ArrayDeque<String> ();
+    }
+
+    public String toString ()
+    {
+	return getClass ().getName () + "(id(" + id + "))";
     }
 
     public void write (final String value)
@@ -128,21 +135,19 @@ public class XmlStanzaHandler
 	    channel_selector = Selector.open ();
 
 	{
-	    StringBuilder name = new StringBuilder ();
+	    StringBuilder sb = new StringBuilder ("channel(");
 
-	    name.append ("channel(");
-	    name.append (channel.toString ());
-	    name.append (")");
+	    sb.append (channel.toString ());
+	    sb.append (")");
 
 	    if (null != listener) {
-		name.append (", listener(");
-		name.append (listener.toString ());
-		name.append (")");
+		sb.append (", listener(");
+		sb.append (listener.toString ());
+		sb.append (")");
 	    }
 
-	    logger = Logger.getLogger (getClass ().getName ()
-				       + "#"
-				       + name.toString ());
+	    id = sb.toString ();
+	    logger = Logger.getLogger (getClass ().getName () + "#" + id);
 
 	    {
 		WorkerThread worker_thread;
@@ -151,7 +156,7 @@ public class XmlStanzaHandler
 		worker = new Thread (worker_thread,
 				     worker_thread.getClass ().getName ()
 				     + "("
-				     + name.toString ()
+				     + sb.toString ()
 				     + ")");
 	    }
 
