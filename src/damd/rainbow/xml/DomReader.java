@@ -1,5 +1,8 @@
 package damd.rainbow.xml;
 
+import java.util.NoSuchElementException;
+import java.util.ArrayDeque;
+
 import org.w3c.dom.Node;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -12,18 +15,21 @@ public class DomReader
 {
     private boolean empty_string_is_a_value;
 
+    private Element root_element;
     private Element current_element;
+
+    private ArrayDeque<Element> bookmarks;
 
     public DomReader (Element element)
     {
 	empty_string_is_a_value = false;
-	current_element = element;
+	root_element = current_element = element;
     }
 
     public DomReader (Document document)
     {
 	empty_string_is_a_value = false;
-	current_element = document.getDocumentElement ();
+	root_element = current_element = document.getDocumentElement ();
     }
 
     public boolean emptyStringIsAValue ()
@@ -106,6 +112,35 @@ public class DomReader
 	    throw new XmlMissingValueException (current_element);
 
 	return text;
+    }
+
+    public DomReader push ()
+    {
+	if (null == bookmarks)
+	    bookmarks = new ArrayDeque<Element> ();
+
+	bookmarks.push (current_element);
+
+	return this;
+    }
+
+    public DomReader pop ()
+	throws NoSuchElementException
+    {
+	if (null == bookmarks)
+	    throw new NoSuchElementException
+		("No bookmarks where ever created");
+
+	current_element = bookmarks.pop ();
+
+	return this;
+    }
+
+    public DomReader moveToRoot ()
+    {
+	current_element = root_element;
+
+	return this;
     }
 
     public void moveToParent ()
