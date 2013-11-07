@@ -1,5 +1,6 @@
 package damd.rainbow.xml;
 
+import java.util.NoSuchElementException;
 import java.util.ArrayDeque;
 
 import org.w3c.dom.Node;
@@ -50,8 +51,6 @@ public class DomBuilder
 	document.appendChild (current_element);
 
 	cascade_next_element = true;
-
-	bookmarks = new ArrayDeque<Element> ();
     }
 
     public Document getDocument ()
@@ -71,14 +70,23 @@ public class DomBuilder
 
     public DomBuilder push ()
     {
+	if (null == bookmarks)
+	    bookmarks = new ArrayDeque<Element> ();
+
 	bookmarks.push (current_element);
 
 	return this;
     }
 
     public DomBuilder pop ()
+	throws NoSuchElementException
     {
+	if (null == bookmarks)
+	    throw new NoSuchElementException
+		("No bookmarks where ever created");
+
 	current_element = bookmarks.pop ();
+	cascade_next_element = false;
 
 	return this;
     }
@@ -126,6 +134,13 @@ public class DomBuilder
 	    addChildElement (name);
 	else
 	    moveToParent ().addChildElement (name);
+
+	return this;
+    }
+
+    public DomBuilder moveToRoot ()
+    {
+	current_element = document.getDocumentElement ();
 
 	return this;
     }
