@@ -4,7 +4,7 @@
 	 default="all"
 	 basedir=".">
 
-  <property name="version.number" value="0.0.8"/>
+  <property name="version.number" value="0.0.9"/>
 
   <property name="deps.dir" value="deps"/>
 
