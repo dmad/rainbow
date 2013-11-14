@@ -73,6 +73,11 @@ public class DomReader
 	return xml;
     }
 
+    public Element getElement ()
+    {
+	return current_element;
+    }
+
     public String getName ()
     {
 	return current_element.getTagName ();
