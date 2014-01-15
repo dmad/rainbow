@@ -148,18 +148,29 @@ public class DomReader
 	return this;
     }
 
-    public void moveToParent ()
+    public boolean tryMoveToParent ()
     {
+	boolean found = true;
 	Node parent = current_element.getParentNode ();
 
 	if (Node.ELEMENT_NODE == parent.getNodeType ())
 	    current_element = (Element) parent;
 	else
-	    throw new IllegalStateException ();
+	    found = false;
+
+	return found;
     }
 
-    public boolean moveToChild (boolean mandatory)
+   public DomReader moveToParent ()
 	throws XmlMissingElementException
+    {
+	if (!tryMoveToParent ())
+	    throw new XmlMissingElementException (current_element, "[parent]");
+
+	return this;
+    }
+
+    public boolean tryMoveToChild ()
     {
 	boolean found = false;
 
@@ -169,14 +180,19 @@ public class DomReader
 	    if (found = (Node.ELEMENT_NODE == child.getNodeType ()))
 		current_element = (Element) child;
 
-	if (mandatory && !found)
-	    throw new XmlMissingElementException (current_element, "[child]");
-
 	return found;
     }
 
-    public boolean moveToNext (boolean mandatory)
+    public DomReader moveToChild ()
 	throws XmlMissingElementException
+    {
+	if (!tryMoveToChild ())
+	    throw new XmlMissingElementException (current_element, "[child]");
+
+	return this;
+    }
+
+    public boolean tryMoveToNext ()
     {
 	boolean found = false;
 
@@ -186,14 +202,19 @@ public class DomReader
 	    if (found = (Node.ELEMENT_NODE == sibling.getNodeType ()))
 		current_element = (Element) sibling;
 
-	if (mandatory && !found)
-	    throw new XmlMissingElementException (current_element, "[next]");
-
 	return found;
     }
 
-    public boolean moveToNamedChild (String name, boolean mandatory)
+   public DomReader moveToNext ()
 	throws XmlMissingElementException
+    {
+	if (!tryMoveToNext ())
+	    throw new XmlMissingElementException (current_element, "[next]");
+
+	return this;
+    }
+
+    public boolean tryMoveToNamedChild (String name)
     {
 	boolean found = false;
 
@@ -207,14 +228,19 @@ public class DomReader
 		    current_element = (Element) child;
 	    }
 
-	if (mandatory && !found)
-	    throw new XmlMissingElementException (current_element, name);
-
 	return found;
     }
 
-    public boolean moveToNextNamed (boolean mandatory)
+    public DomReader moveToNamedChild (String name)
 	throws XmlMissingElementException
+    {
+	if (!tryMoveToNamedChild (name))
+	    throw new XmlMissingElementException (current_element, name);
+
+	return this;
+    }
+
+    public boolean tryMoveToNextNamed ()
     {
 	boolean found = false;
 
@@ -227,11 +253,18 @@ public class DomReader
 		    current_element = (Element) sibling;
 	    }
 
-	if (mandatory && !found)
+	return found;
+    }
+
+    public DomReader moveToNextNamed ()
+	throws XmlMissingElementException
+    {
+	if (!tryMoveToNextNamed ())
 	    throw new XmlMissingElementException
 		(current_element.getParentNode (),
 		 current_element.getNodeName ());
 
-	return found;
+	return this;
     }
+
 }
