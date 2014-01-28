@@ -38,7 +38,8 @@ public class SocketListener
 	if (null == name)
 	    throw new NullPointerException ("name");
 
-	logger = Logger.getLogger (getClass ().getName () + "#" + name);
+	logger = Logger.getLogger (getClass ().getName ()
+				   + ".instance(" + name + ")");
 
 	this.name = name;
 

@@ -146,7 +146,8 @@ public class XmlStanzaHandler
 	    }
 
 	    id = sb.toString ();
-	    logger = Logger.getLogger (getClass ().getName () + "#" + id);
+	    logger = Logger.getLogger (getClass ().getName ()
+				       + ".instance(" + id + ")");
 
 	    delegate.setDelegator (this);
 

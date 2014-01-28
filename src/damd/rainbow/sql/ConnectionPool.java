@@ -49,7 +49,8 @@ public class ConnectionPool
 	if (null == name)
 	    throw new NullPointerException ("name");
 
-	logger = Logger.getLogger (getClass ().getName () + "#" + name);
+	logger = Logger.getLogger (getClass ().getName ()
+				   + ".instance(" + name + ")");
 
 	this.name = name;
 	ex_prefix = getClass ().getName ()
