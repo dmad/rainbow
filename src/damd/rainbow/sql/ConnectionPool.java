@@ -243,10 +243,20 @@ public class ConnectionPool
 	capacity_increment = increment;
     }
 
+    // >>> Named
+
     public synchronized String getName ()
     {
 	return name;
     }
+
+    public void setName (final String name)
+	throws UnsupportedOperationException
+    {
+	throw new UnsupportedOperationException ();
+    }
+
+    // <<< Named
 
     private synchronized void addConnections (int count)
 	throws SQLException

@@ -1,6 +1,7 @@
 package damd.rainbow.behavior;
 
 public interface Engine
+    extends Named
 {
     public enum State
     {

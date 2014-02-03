@@ -51,10 +51,20 @@ public class SocketListener
 	return getClass ().getName () + "(name(" + name + "))";
     }
 
+    // >>> Named
+
     public String getName ()
     {
 	return name;
     }
+
+    public void setName (final String name)
+	throws UnsupportedOperationException
+    {
+	throw new UnsupportedOperationException ();
+    }
+
+    // <<< Named
 
     private void checkState (State needed_state)
 	throws IllegalStateException
