@@ -44,20 +44,9 @@ public class ConnectionPool
 
     private Thread worker;
 
-    public ConnectionPool (String name)
+    public ConnectionPool ()
     {
-	if (null == name)
-	    throw new NullPointerException ("name");
-
-	logger = Logger.getLogger (getClass ().getName ()
-				   + ".instance(" + name + ")");
-
-	this.name = name;
-	ex_prefix = getClass ().getName ()
-	    .substring (getClass ().getName ().lastIndexOf ('.') + 1)
-	    + "("
-	    + name
-	    + ") : ";
+	setName (null);
 
 	timeout = 0; // ~ no timeout
 
@@ -250,10 +239,17 @@ public class ConnectionPool
 	return name;
     }
 
-    public void setName (final String name)
-	throws UnsupportedOperationException
+    public synchronized void setName (final String name)
     {
-	throw new UnsupportedOperationException ();
+	logger = Logger.getLogger (getClass ().getName ()
+				   + ".instance(" + name + ")");
+
+	this.name = name;
+	ex_prefix = getClass ().getName ()
+	    .substring (getClass ().getName ().lastIndexOf ('.') + 1)
+	    + "("
+	    + name
+	    + ") : ";
     }
 
     // <<< Named
