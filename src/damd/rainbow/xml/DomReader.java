@@ -13,8 +13,6 @@ import org.w3c.dom.ls.LSSerializer;
 
 public class DomReader
 {
-    private boolean empty_string_is_a_value;
-
     private Element root_element;
     private Element current_element;
 
@@ -22,33 +20,12 @@ public class DomReader
 
     public DomReader (Element element)
     {
-	empty_string_is_a_value = false;
 	root_element = current_element = element;
     }
 
     public DomReader (Document document)
     {
-	empty_string_is_a_value = false;
 	root_element = current_element = document.getDocumentElement ();
-    }
-
-    public boolean emptyStringIsAValue ()
-    {
-	return empty_string_is_a_value;
-    }
-
-    public void setEmptyStringIsAValue (boolean is_a_value)
-    {
-	empty_string_is_a_value = is_a_value;
-    }
-
-    private boolean stringHasAValue (final String string)
-    {
-	return null == string
-	    ? false
-	    : (string.isEmpty ()
-	       ? empty_string_is_a_value
-	       : true);
     }
 
     public String serialize ()
@@ -88,7 +65,12 @@ public class DomReader
     {
 	String value = current_element.getAttribute (name);
 
-	if (mandatory && !(stringHasAValue (value)))
+	/* Element.getAttribute returns an empty string if the
+	   attribute is not specified, change it to null */
+	if (null != value && value.isEmpty ())
+	    value = null;
+
+	if (mandatory && null == value)
 	    throw new XmlMissingAttributeException (current_element,
 						    name);
 
@@ -112,8 +94,13 @@ public class DomReader
 	}
 
 	text = (null == sb ? null : sb.toString ());
+	if (null != text) {
+	    text = text.trim ();
+	    if (text.isEmpty ())
+		text = null;
+	}
 
-	if (mandatory && !(stringHasAValue (text)))
+	if (mandatory && null == text)
 	    throw new XmlMissingValueException (current_element);
 
 	return text;
