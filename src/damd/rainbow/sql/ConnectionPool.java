@@ -1,6 +1,7 @@
 package damd.rainbow.sql;
 
-import java.util.Vector;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Properties;
 
@@ -39,25 +40,14 @@ public class ConnectionPool
 
     private int timeout; // in seconds (<= 0 ~ no timeout)
 
-    private Vector<Connection> available_connections;
-    private Vector<ConnectionProxy> used_connections;
+    private List<Connection> available_connections;
+    private List<ConnectionProxy> used_connections;
 
     private Thread worker;
 
-    public ConnectionPool (String name)
+    public ConnectionPool ()
     {
-	if (null == name)
-	    throw new NullPointerException ("name");
-
-	logger = Logger.getLogger (getClass ().getName ()
-				   + ".instance(" + name + ")");
-
-	this.name = name;
-	ex_prefix = getClass ().getName ()
-	    .substring (getClass ().getName ().lastIndexOf ('.') + 1)
-	    + "("
-	    + name
-	    + ") : ";
+	setName (null);
 
 	timeout = 0; // ~ no timeout
 
@@ -65,8 +55,8 @@ public class ConnectionPool
 	maximum_capacity = Integer.MAX_VALUE;
 	capacity_increment = 1;
 
-	available_connections = new Vector<Connection> ();
-	used_connections = new Vector<ConnectionProxy> ();
+	available_connections = new ArrayList<> ();
+	used_connections = new ArrayList<> ();
     }
 
     public String toString ()
@@ -250,10 +240,17 @@ public class ConnectionPool
 	return name;
     }
 
-    public void setName (final String name)
-	throws UnsupportedOperationException
+    public synchronized void setName (final String name)
     {
-	throw new UnsupportedOperationException ();
+	logger = Logger.getLogger (getClass ().getName ()
+				   + ".instance(" + name + ")");
+
+	this.name = name;
+	ex_prefix = getClass ().getName ()
+	    .substring (getClass ().getName ().lastIndexOf ('.') + 1)
+	    + "("
+	    + name
+	    + ") : ";
     }
 
     // <<< Named
@@ -411,9 +408,9 @@ public class ConnectionPool
     private synchronized void reapConnections ()
     {
 	if (timeout > 0) {
-	    Vector<ConnectionProxy> proxies;
+	    List<ConnectionProxy> proxies;
 
-	    proxies = new Vector<ConnectionProxy> (used_connections);
+	    proxies = new ArrayList<> (used_connections);
 	    for (ConnectionProxy proxy : proxies) {
 		if (proxy.getAge () > timeout) {
 		    logger.warning ("Connection has timed out ("
