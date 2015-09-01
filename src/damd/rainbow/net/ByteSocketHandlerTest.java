@@ -13,9 +13,11 @@ import damd.rainbow.behavior.Engine;
 public class ByteSocketHandlerTest
     implements
 	SocketHandlerFactory,
-	ByteSocketHandler.Delegate
+	BytePipelineTarget
 {
-    private ByteSocketHandler delegator;
+    private BytePipelineSource source;
+
+    // >>> SocketHandlerFactory
 
     public SocketHandler createSocketHandler ()
     {
@@ -24,41 +26,62 @@ public class ByteSocketHandlerTest
 	return new ByteSocketHandler (es, es, this);
     }
 
-    public void setDelegator (final ByteSocketHandler delegator)
+    // <<< SocketHandlerFactory
+
+    // >>> BytePipelineTarget
+
+    public void setSource (final BytePipelineSource source)
     {
-	this.delegator = delegator;
+	this.source = source;
     }
 
     public void handleInput (ByteBuffer data)
     {
 	long start = System.currentTimeMillis ();
 
-	System.out.println ("position(" + data.position ()
+	System.out.println ("before read: position(" + data.position ()
 			    + ") limit(" + data.limit ()
 			    + ") remaining(" + data.remaining ()
 			    + ")");
 
-	try {
-	    while (System.currentTimeMillis () - start < 10000) {
-		delegator.write (data);
-		Thread.sleep (1000);
-	    }
-	} catch (InterruptedException x) {
+	for (int i = 0;i < 10 && data.hasRemaining ();++i) {
+	    final byte b = data.get ();
+
+	    System.out.print (Byte.toString (b) + " ");
 	}
+	System.out.println ("");
+
+	System.out.println ("after read: position(" + data.position ()
+			    + ") limit(" + data.limit ()
+			    + ") remaining(" + data.remaining ()
+			    + ")");
+
+	/*
+	data.compact ();
+
+	System.out.println ("after compact: position(" + data.position ()
+			    + ") limit(" + data.limit ()
+			    + ") remaining(" + data.remaining ()
+			    + ")");
+	*/
+
+	source.write (ByteBuffer.wrap ("got it".getBytes ()));
     }
 
     public void cleanup ()
     {
     }
 
+    // <<< BytePipelineTarget
+
     public static void main (String[] args)
     {
 	try {
-	    ByteSocketHandlerTest that = new ByteSocketHandlerTest ();
 	    SocketListener listener = new SocketListener ("test");
 	    listener.setListenerAddress (new InetSocketAddress ((InetAddress) null,
 								10000));
-	    listener.setHandlerFactory (that);
+
+	    listener.setHandlerFactory (new ByteSocketHandlerTest ());
 	    listener.changeState (Engine.State.RUNNING);
 	    while (true) {
 		Thread.sleep (10000);

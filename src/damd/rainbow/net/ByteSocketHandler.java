@@ -21,43 +21,28 @@ import java.nio.channels.SelectionKey;
 public class ByteSocketHandler
     implements
 	SocketHandler,
-	Runnable
+	Runnable,
+	BytePipelineSource
 {
-    public interface Delegate
-    {
-	public void setDelegator (ByteSocketHandler delegator);
-
-	public void handleInput (ByteBuffer data);
-
-	public void cleanup ();
-    }
-
-    public enum State
-    {
-	INVALID,
-	CLOSED,
-	VALID,
-	OPEN,
-	CLOSING
-    }
-
     private Logger logger;
 
     private String id;
 
-    private final Delegate delegate;
+    private final ExecutorService select_executor;
+    private final ExecutorService target_executor;
 
-    private ExecutorService select_executor;
-    private ExecutorService delegate_executor;
+    private final BytePipelineTarget target;
 
     private SocketListener listener; // sychronized on 'this' for assignment
     private SocketChannel channel; // synchronized on 'this' for assignment
 
     private Future<?> select_future; // synchronized on 'this' for assignment
 
-    private Deque<ByteBuffer> write_deque; // synchronized on itself
+    private final Deque<ByteBuffer> write_deque; // synchronized on itself
 
     private Selector channel_selector; // not synchronized
+
+    private ConnectionState state; // synchronized on 'this'
 
     // >>> select thread (~ select_future) only, no synchronization
 
@@ -66,21 +51,19 @@ public class ByteSocketHandler
 
     private SelectionKey selection_key;
 
-    private State state;
-
-    private Future<?> delegate_future;
+    private Future<?> target_future;
 
     // <<< select thread
 
     public ByteSocketHandler (final ExecutorService select_executor,
-			      final ExecutorService delegate_executor,
-			      final Delegate delegate)
+			      final ExecutorService target_executor,
+			      final BytePipelineTarget target)
     {
 	logger = Logger.getLogger (getClass ().getName ());
 
-	this.delegate = delegate;
 	this.select_executor = select_executor;
-	this.delegate_executor = delegate_executor;
+	this.target_executor = target_executor;
+	this.target = target;
 
 	write_deque = new ArrayDeque<ByteBuffer> ();
     }
@@ -88,6 +71,18 @@ public class ByteSocketHandler
     public String toString ()
     {
 	return getClass ().getName () + "(id(" + id + "))";
+    }
+
+    // >>> BytePipelineSource
+
+    public synchronized ConnectionState getState ()
+    {
+	return state;
+    }
+
+    public synchronized void setState (final ConnectionState state)
+    {
+	this.state = state;
     }
 
     public void write (final ByteBuffer value)
@@ -103,24 +98,12 @@ public class ByteSocketHandler
 	}
     }
 
-    public void write (final byte[] value)
-    {
-	if (null != value && value.length > 0) {
-	    synchronized (write_deque) {
-		write_deque.offerLast (ByteBuffer.wrap (value));
-	    }
-
-	    synchronized (this) {
-		if (null != select_future && !(select_future.isDone ()))
-		    channel_selector.wakeup ();
-	    }
-	}
-    }
+    // <<< BytePipelineSource
 
     // >>> SocketHandler
 
-    public synchronized void open (SocketChannel channel,
-				   SocketListener listener)
+    public synchronized void open (final SocketChannel channel,
+				   final SocketListener listener)
 	throws IOException
     {
 	if (null != select_future && !(select_future.isDone ()))
@@ -136,15 +119,17 @@ public class ByteSocketHandler
 	    channel_selector = Selector.open ();
 
 	{
-	    StringBuilder sb = new StringBuilder ("channel(");
+	    final StringBuilder sb;
 
-	    sb.append (channel.toString ());
-	    sb.append (")");
+	    sb = new StringBuilder ("channel(")
+		.append (channel.toString ())
+		.append (")");
 
 	    if (null != listener) {
-		sb.append (", listener(");
-		sb.append (listener.toString ());
-		sb.append (")");
+		sb
+		    .append (", listener(")
+		    .append (listener.toString ())
+		    .append (")");
 	    }
 
 	    id = sb.toString ();
@@ -152,7 +137,7 @@ public class ByteSocketHandler
 				       + ".instance(" + id + ")");
 	}
 
-	delegate.setDelegator (this);
+	target.setSource (this);
 
 	select_future = select_executor.submit (this);
     }
@@ -171,17 +156,17 @@ public class ByteSocketHandler
     private void setup ()
 	throws IOException
     {
-	input_buffer = ByteBuffer.allocateDirect (2048);
-	output_buffer = ByteBuffer.allocateDirect (2048);
+	input_buffer = ByteBuffer.allocateDirect (20480);
+	output_buffer = ByteBuffer.allocateDirect (20480);
 	selection_key = channel.register (channel_selector,
 					  SelectionKey.OP_READ);
 
-	state = State.VALID;
+	state = ConnectionState.VALID;
     }
 
     private void cleanup ()
     {
-	delegate.cleanup ();
+	target.cleanup ();
 
 	input_buffer = null;
 	output_buffer = null;
@@ -193,6 +178,8 @@ public class ByteSocketHandler
 		logger.log (Level.WARNING,
 			    "While closing channel_selector",
 			    x);
+	    } finally {
+		channel_selector = null;
 	    }
 	}
 
@@ -220,6 +207,8 @@ public class ByteSocketHandler
 	throws
 	    IOException
     {
+	ConnectionState state_snapshot = getState ();
+
 	synchronized (write_deque) {
 	    if (output_buffer.hasRemaining ()
 		&& !(write_deque.isEmpty ())) {
@@ -244,44 +233,57 @@ public class ByteSocketHandler
 	     ? selection_key.interestOps () & ~(SelectionKey.OP_WRITE)
 	     : selection_key.interestOps () | SelectionKey.OP_WRITE);
 
-	if (State.CLOSING == state)
+	if (ConnectionState.CLOSING == state_snapshot)
 	    if (output_buffer.position () > 0)
 		selection_key.interestOps
 		    (selection_key.interestOps ()
 		     & ~(SelectionKey.OP_READ));
 	    else
-		state = State.CLOSED;
+		setState (state_snapshot = ConnectionState.CLOSED);
 
-	if (state.ordinal () >= State.VALID.ordinal ()) {
+	if (state_snapshot.ordinal () >= ConnectionState.VALID.ordinal ()) {
 	    if (channel_selector.select () > 0) {
-		if ((0 != (selection_key.readyOps ()
-			   & SelectionKey.OP_READ))
-		    && (null == delegate_future
-			|| delegate_future.isDone ())) {
-		    int read = channel.read (input_buffer);
+		if (selection_key.isReadable ()
+		    && (null == target_future
+			|| target_future.isDone ())) {
+		    final int read;
+
+		    input_buffer.compact ();
+		    read = channel.read (input_buffer);
 
 		    if (read < 0) // end of stream
-			state = State.CLOSED;
+			setState (state_snapshot =
+				  ConnectionState.CLOSED);
 		    else if (read > 0) {
-			final ByteBuffer copy;
-
 			input_buffer.flip ();
-			copy  = ByteBuffer.allocate (input_buffer.remaining ());
-			copy.put (input_buffer).flip ();
-			input_buffer.clear ();
-
-			delegate_future = delegate_executor.submit
+			if (1 == 1) {
+			    try {
+				target.handleInput (input_buffer);
+			    } catch (Exception x) {
+				x.printStackTrace ();
+			    }
+			} else {
+			target_future = target_executor.submit
 			    (new Runnable () {
 				    public void run ()
 				    {
-					delegate.handleInput (copy);
+					try {
+					    target.handleInput (input_buffer);
+					} catch (Exception x) {
+					    x.printStackTrace ();
+					    logger.log
+						(Level.WARNING,
+						 "While handling input",
+						 x);
+					    setState (ConnectionState.INVALID);
+					}
 				    }
 				});
+			}
 		    }
 		}
 
-		if (0 != (selection_key.readyOps ()
-			  & SelectionKey.OP_WRITE)
+		if (selection_key.isWritable ()
 		    && output_buffer.position () > 0) {
 		    output_buffer.flip ();
 		    try {
@@ -298,10 +300,12 @@ public class ByteSocketHandler
 
     public void run ()
     {
+	logger.info ("Starting to handle socket");
+
 	try {
 	    setup ();
 
-	    while (state.ordinal () >= State.VALID.ordinal ())
+	    while (getState ().ordinal () >= ConnectionState.VALID.ordinal ())
 		select ();
 	} catch (ClosedSelectorException x) {
 	    // swallow, requested to stop
@@ -310,8 +314,9 @@ public class ByteSocketHandler
 	} finally {
 	    cleanup ();
 	}
+
+	logger.info ("Stopped handling socket");
     }
 
     // <<< Runnable
-
 }
