@@ -3,6 +3,7 @@ package damd.rainbow.net;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import java.net.InetAddress;
@@ -12,6 +13,7 @@ import java.nio.ByteBuffer;
 
 import org.w3c.dom.Document;
 
+import org.xml.sax.SAXException;
 import org.xml.sax.Attributes;
 
 import damd.rainbow.behavior.Engine;
@@ -25,6 +27,7 @@ public class XmlStanzaHandlerTest
 	private ExecutorService es = Executors.newCachedThreadPool ();
 
 	public SocketHandler createSocketHandler ()
+	    throws SAXException
 	{
 	    return new ByteSocketHandler
 		(es, es,
@@ -46,14 +49,14 @@ public class XmlStanzaHandlerTest
 
     public void setDelegator (final XmlStanzaHandler delegator)
     {
-	logger.info ("setDelegator called");
+	logger.finest ("setDelegator called");
 
 	this.delegator = delegator;
     }
 
     public boolean openStream (final String name, final Attributes attrs)
     {
-	logger.info ("openStream called");
+	logger.finest ("openStream called");
 
 	stream_tag = name;
 	delegator.write ("<" + stream_tag + ">");
@@ -81,6 +84,8 @@ public class XmlStanzaHandlerTest
 
     public static void main (String[] args)
     {
+	Logger.getGlobal ().setLevel (Level.ALL);
+
 	try {
 	    SocketListener listener = new SocketListener ("test");
 	    listener.setListenerAddress (new InetSocketAddress ((InetAddress) null,

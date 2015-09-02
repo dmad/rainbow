@@ -82,6 +82,8 @@ public class ByteSocketHandler
 
     public synchronized void setState (final ConnectionState state)
     {
+	logger.info ("changing state from(" + this.state + ") to("
+		     + state + ")");
 	this.state = state;
     }
 
@@ -145,7 +147,8 @@ public class ByteSocketHandler
     public synchronized void close ()
 	throws IOException
     {
-	if (null != select_future && !(select_future.isDone ()))
+	if (null != channel_selector
+	    && null != select_future && !(select_future.isDone ()))
 	    channel_selector.close ();
     }
 
@@ -256,13 +259,6 @@ public class ByteSocketHandler
 				  ConnectionState.CLOSED);
 		    else if (read > 0) {
 			input_buffer.flip ();
-			if (1 == 1) {
-			    try {
-				target.handleInput (input_buffer);
-			    } catch (Exception x) {
-				x.printStackTrace ();
-			    }
-			} else {
 			target_future = target_executor.submit
 			    (new Runnable () {
 				    public void run ()
@@ -279,7 +275,6 @@ public class ByteSocketHandler
 					}
 				    }
 				});
-			}
 		    }
 		}
 
@@ -305,16 +300,24 @@ public class ByteSocketHandler
 	try {
 	    setup ();
 
-	    while (getState ().ordinal () >= ConnectionState.VALID.ordinal ())
+	    while (getState ().ordinal () >= ConnectionState.VALID.ordinal ()) {
 		select ();
+		logger.info ("state after select is (" + getState () + ")");
+	    }
+	    logger.info ("after select loop");
 	} catch (ClosedSelectorException x) {
 	    // swallow, requested to stop
 	} catch (IOException x) {
 	    logger.log (Level.WARNING, "While interacting with channel", x);
 	} finally {
-	    cleanup ();
+	    try {
+		cleanup ();
+	    } catch (Exception x) {
+		logger.log (Level.WARNING, "While cleaning up", x);
+	    }
 	}
 
+	System.out.println ("Stopped handling socket");
 	logger.info ("Stopped handling socket");
     }
 

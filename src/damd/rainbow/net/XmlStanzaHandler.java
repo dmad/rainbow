@@ -45,8 +45,6 @@ public class XmlStanzaHandler
 
     private Logger logger;
 
-    private String id;
-
     private final Delegate delegate;
 
     private BytePipelineSource source;
@@ -54,53 +52,29 @@ public class XmlStanzaHandler
     private NioSaxParser parser;
 
     public XmlStanzaHandler (final Delegate delegate)
+	throws SAXException
     {
 	logger = Logger.getLogger (getClass ().getName ());
 
 	this.delegate = delegate;
-    }
+	delegate.setDelegator (this);
 
-    public String toString ()
-    {
-	return getClass ().getName () + "(id(" + id + "))";
+	parser = NioSaxParserFactory.getInstance ().newInstance ();
+	parser.setHandler (new ContentHandlerImpl ());
+	parser.startDocument ();
     }
 
     // >>> BytePipelineTarget
 
     public void setSource (final BytePipelineSource source)
     {
-	logger.info ("setSource called");
 	this.source = source;
-	this.delegate.setDelegator (this);
     }
 
     public void handleInput (final ByteBuffer input)
 	throws SAXException
     {
-	if (1 == 1) {
-	    logger.info ("hello");
-	    return;
-	}
-	try {
-	    if (null == parser) {
-		logger.info ("creating parser");
-		parser = NioSaxParserFactory.getInstance ().newInstance ();
-		logger.info ("after parser newInstance");
-		parser.setHandler (new ContentHandlerImpl ());
-		logger.info ("after setHandler");
-		parser.startDocument ();
-		logger.info ("after startDocument");
-	    }
-
-	    parser.parse (new NioSaxSource (input));
-
-	    logger.info ("after parse: position(" + input.position ()
-			 + ") limit(" + input.limit ()
-			 + ") remaining(" + input.remaining ()
-			 + ")");
-	} catch (Exception x) {
-	    x.printStackTrace ();
-	}
+	parser.parse (new NioSaxSource (input));
     }
 
     public void cleanup ()

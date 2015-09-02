@@ -121,17 +121,17 @@ public class SocketListener
 
 		schannel = channel.accept (); // blocks
 
-		handler = handler_factory.createSocketHandler ();
-
-		synchronized (handlers) {
-		    handlers.add (handler);
-		}
-
 		try {
+		    handler = handler_factory.createSocketHandler ();
+
+		    synchronized (handlers) {
+			handlers.add (handler);
+		    }
+
 		    handler.open (schannel, this);
 		} catch (Exception x) {
 		    logger.log (Level.SEVERE,
-				"While opening SocketHandler("
+				"While creating/opening SocketHandler("
 				+ handler.toString ()
 				+ ")",
 				x);
