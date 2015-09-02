@@ -29,29 +29,22 @@ import uk.org.retep.niosax.NioSaxSource;
 
 public class XmlStanzaHandler
     implements
-	BytePipelineTarget
+	BytePipelineTarget,
+	XmlStanzaDelegator,
+	ContentHandler
 {
-    public interface Delegate
-    {
-	public void setDelegator (XmlStanzaHandler delegator);
-
-	public boolean openStream (String name, Attributes attrs);
-	public void closeStream ();
-
-	public void handleStanza (Document stanza);
-
-	public void cleanup ();
-    }
-
     private Logger logger;
 
-    private final Delegate delegate;
+    private final XmlStanzaDelegate delegate;
 
     private BytePipelineSource source;
 
     private NioSaxParser parser;
 
-    public XmlStanzaHandler (final Delegate delegate)
+    private StringBuilder element_characters;
+    private DomBuilder stanza;
+
+    public XmlStanzaHandler (final XmlStanzaDelegate delegate)
 	throws SAXException
     {
 	logger = Logger.getLogger (getClass ().getName ());
@@ -60,7 +53,7 @@ public class XmlStanzaHandler
 	delegate.setDelegator (this);
 
 	parser = NioSaxParserFactory.getInstance ().newInstance ();
-	parser.setHandler (new ContentHandlerImpl ());
+	parser.setHandler (this);
 	parser.startDocument ();
     }
 
@@ -94,6 +87,8 @@ public class XmlStanzaHandler
 
     // <<< BytePipelineTarget
 
+    // >>> XmlStanzaDelegator
+
     public void write (final String value)
     {
 	assert (null != source);
@@ -115,117 +110,115 @@ public class XmlStanzaHandler
 	    write (new DomReader (stanza));
     }
 
-    private class ContentHandlerImpl
-	implements ContentHandler
+    // <<< XmlStanzaDelegator
+
+    // >>> ContentHandler
+
+    public void startElement (final String uri,
+			      final String local_name,
+			      final String name,
+			      final Attributes attrs)
     {
-	private StringBuilder element_characters;
+	final ConnectionState state = source.getState ();
 
-	private DomBuilder stanza;
+	element_characters.setLength (0);
 
-	public void startElement (final String uri,
-				  final String local_name,
-				  final String name,
-				  final Attributes attrs)
-	{
-	    final ConnectionState state = source.getState ();
+	switch (state) {
+	case VALID:
+	    source.setState (delegate.openStream (name, attrs)
+			     ? ConnectionState.OPEN
+			     : ConnectionState.INVALID);
+	    break;
+	case OPEN:
+	    if (null == stanza) {
+		try {
+		    stanza = new DomBuilder (name);
+		} catch (XmlException x) {
+		    // TODO: handleException (x);
+		}
+	    } else
+		stanza.addChildElement (name);
 
-	    element_characters.setLength (0);
-
-	    switch (state) {
-	    case VALID:
-		source.setState (delegate.openStream (name, attrs)
-				 ? ConnectionState.OPEN
-				 : ConnectionState.INVALID);
-		break;
-	    case OPEN:
-		if (null == stanza) {
-		    try {
-			stanza = new DomBuilder (name);
-		    } catch (XmlException x) {
-			// TODO: handleException (x);
-		    }
-		} else
-		    stanza.addChildElement (name);
-
-		if (null != attrs && attrs.getLength () > 0)
-		    for (int a = 0;a < attrs.getLength ();++a)
-			stanza.addAttribute
-			    (attrs.getLocalName (a),
-			     attrs.getValue (a));
-		break;
-	    default:
-		logger.warning ("Ignoring start element("
-				+ name
-				+ ") as the stream state is "
-				+ state);
-	    }
+	    if (null != attrs && attrs.getLength () > 0)
+		for (int a = 0;a < attrs.getLength ();++a)
+		    stanza.addAttribute
+			(attrs.getLocalName (a),
+			 attrs.getValue (a));
+	    break;
+	default:
+	    logger.warning ("Ignoring start element("
+			    + name
+			    + ") as the stream state is "
+			    + state);
 	}
+    }
 
-	public void endElement (final String uri,
-				final String local_name,
-				final String name)
-	{
-	    final ConnectionState state = source.getState ();
-	    final String data = (0 == element_characters.length ()
-				 ? null
-				 : element_characters.toString ());
+    public void endElement (final String uri,
+			    final String local_name,
+			    final String name)
+    {
+	final ConnectionState state = source.getState ();
+	final String data = (0 == element_characters.length ()
+			     ? null
+			     : element_characters.toString ());
 
-	    element_characters.setLength (0);
+	element_characters.setLength (0);
 
-	    switch (state) {
-	    case OPEN:
-		if (null == stanza) {
-		    delegate.closeStream ();
-		    source.setState (ConnectionState.CLOSING);
+	switch (state) {
+	case OPEN:
+	    if (null == stanza) {
+		delegate.closeStream ();
+		source.setState (ConnectionState.CLOSING);
+	    } else {
+		if (!(stanza.getName ().equals (name))) {
+		    logger.warning ("Unbalanced element found");
+		    source.setState (ConnectionState.INVALID);
 		} else {
-		    if (!(stanza.getName ().equals (name))) {
-			logger.warning ("Unbalanced element found");
-			source.setState (ConnectionState.INVALID);
-		    } else {
-			if (null != data)
-			    stanza.addText (data);
+		    if (null != data)
+			stanza.addText (data);
 
-			if (stanza.hasParent ())
-			    stanza.moveToParent ();
-			else {
-			    delegate.handleStanza (stanza.getDocument ());
-			    stanza = null;
-			}
+		    if (stanza.hasParent ())
+			stanza.moveToParent ();
+		    else {
+			delegate.handleStanza (stanza.getDocument ());
+			stanza = null;
 		    }
 		}
-		break;
-	    default:
-		logger.warning ("Ignoring end element("
-				+ name
-				+ ") as the stream state is "
-				+ state);
 	    }
+	    break;
+	default:
+	    logger.warning ("Ignoring end element("
+			    + name
+			    + ") as the stream state is "
+			    + state);
 	}
-
-	public void characters (char[] ch, int start, int length)
-	{
-	    element_characters.append (ch, start, length);
-	}
-
-	public void startDocument ()
-	{
-	    element_characters = new StringBuilder ();
-
-	    stanza = null;
-	}
-
-	public void endDocument () {}
-
-	public void startPrefixMapping (String prefix, String uri) {}
-
-	public void endPrefixMapping (String prefix) {}
-
-	public void ignorableWhitespace (char[] ch, int start, int length) {}
-
-	public void processingInstruction (String target, String data) {}
-
-	public void setDocumentLocator (Locator locator) {}
-
-	public void skippedEntity (String name) {}
     }
+
+    public void characters (char[] ch, int start, int length)
+    {
+	element_characters.append (ch, start, length);
+    }
+
+    public void startDocument ()
+    {
+	element_characters = new StringBuilder ();
+
+	stanza = null;
+    }
+
+    public void endDocument () {}
+
+    public void startPrefixMapping (String prefix, String uri) {}
+
+    public void endPrefixMapping (String prefix) {}
+
+    public void ignorableWhitespace (char[] ch, int start, int length) {}
+
+    public void processingInstruction (String target, String data) {}
+
+    public void setDocumentLocator (Locator locator) {}
+
+    public void skippedEntity (String name) {}
+
+    // <<< ContentHandler
 }

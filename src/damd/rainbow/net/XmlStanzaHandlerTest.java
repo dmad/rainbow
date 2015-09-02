@@ -19,7 +19,7 @@ import org.xml.sax.Attributes;
 import damd.rainbow.behavior.Engine;
 
 public class XmlStanzaHandlerTest
-    implements XmlStanzaHandler.Delegate
+    implements XmlStanzaDelegate
 {
     private static class Factory
 	implements SocketHandlerFactory
@@ -37,7 +37,7 @@ public class XmlStanzaHandlerTest
 
     private Logger logger;
 
-    private XmlStanzaHandler delegator;
+    private XmlStanzaDelegator delegator;
     private String stream_tag;
 
     public XmlStanzaHandlerTest ()
@@ -45,12 +45,10 @@ public class XmlStanzaHandlerTest
 	logger = Logger.getLogger (getClass ().getName ());
     }
 
-    // >>> XmlStanzaHandler.Delegate
+    // >>> XmlStanzaDelegate
 
-    public void setDelegator (final XmlStanzaHandler delegator)
+    public void setDelegator (final XmlStanzaDelegator delegator)
     {
-	logger.finest ("setDelegator called");
-
 	this.delegator = delegator;
     }
 
@@ -80,7 +78,7 @@ public class XmlStanzaHandlerTest
     {
     }
 
-    // <<< XmlStanzaHandler.Delegate
+    // <<< XmlStanzaDelegate
 
     public static void main (String[] args)
     {

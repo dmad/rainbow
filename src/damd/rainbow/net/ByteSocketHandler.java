@@ -82,8 +82,6 @@ public class ByteSocketHandler
 
     public synchronized void setState (final ConnectionState state)
     {
-	logger.info ("changing state from(" + this.state + ") to("
-		     + state + ")");
 	this.state = state;
     }
 
@@ -265,8 +263,7 @@ public class ByteSocketHandler
 				    {
 					try {
 					    target.handleInput (input_buffer);
-					} catch (Exception x) {
-					    x.printStackTrace ();
+					} catch (Throwable x) {
 					    logger.log
 						(Level.WARNING,
 						 "While handling input",
@@ -295,30 +292,28 @@ public class ByteSocketHandler
 
     public void run ()
     {
-	logger.info ("Starting to handle socket");
+	logger.fine ("Starting to handle socket");
 
 	try {
 	    setup ();
 
-	    while (getState ().ordinal () >= ConnectionState.VALID.ordinal ()) {
+	    while (getState ().ordinal () >= ConnectionState.VALID.ordinal ())
 		select ();
-		logger.info ("state after select is (" + getState () + ")");
-	    }
-	    logger.info ("after select loop");
 	} catch (ClosedSelectorException x) {
 	    // swallow, requested to stop
 	} catch (IOException x) {
 	    logger.log (Level.WARNING, "While interacting with channel", x);
+	} catch (Throwable x) {
+	    logger.log (Level.SEVERE, "While interacting with channel", x);
 	} finally {
 	    try {
 		cleanup ();
-	    } catch (Exception x) {
+	    } catch (Throwable x) {
 		logger.log (Level.WARNING, "While cleaning up", x);
 	    }
 	}
 
-	System.out.println ("Stopped handling socket");
-	logger.info ("Stopped handling socket");
+	logger.fine ("Stopped handling socket");
     }
 
     // <<< Runnable
