@@ -1,4 +1,4 @@
-package damd.rainbow.net;
+package damd.rainbow.net.pipeline.stanza;
 
 import org.w3c.dom.Document;
 

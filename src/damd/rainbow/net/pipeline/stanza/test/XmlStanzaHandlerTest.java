@@ -1,4 +1,4 @@
-package damd.rainbow.net;
+package damd.rainbow.net.pipeline.stanza.test;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
@@ -18,6 +18,17 @@ import org.xml.sax.Attributes;
 
 import damd.rainbow.behavior.Engine;
 
+import damd.rainbow.net.SocketListener;
+import damd.rainbow.net.SocketHandler;
+import damd.rainbow.net.SocketHandlerFactory;
+
+import damd.rainbow.net.pipeline.Pipeline;
+import damd.rainbow.net.pipeline.PipelineSocketHandler;
+
+import damd.rainbow.net.pipeline.stanza.XmlStanzaHandler;
+import damd.rainbow.net.pipeline.stanza.XmlStanzaDelegator;
+import damd.rainbow.net.pipeline.stanza.XmlStanzaDelegate;
+
 public class XmlStanzaHandlerTest
     implements XmlStanzaDelegate
 {
@@ -27,11 +38,14 @@ public class XmlStanzaHandlerTest
 	private ExecutorService es = Executors.newCachedThreadPool ();
 
 	public SocketHandler createSocketHandler ()
-	    throws SAXException
 	{
-	    return new ByteSocketHandler
-		(es, es,
-		 new XmlStanzaHandler (new XmlStanzaHandlerTest ()));
+	    final PipelineSocketHandler sh = new PipelineSocketHandler (es, es);
+
+	    new Pipeline ()
+		.add (sh)
+		.add (new XmlStanzaHandler (new XmlStanzaHandlerTest ()));
+
+	    return sh;
 	}
     }
 

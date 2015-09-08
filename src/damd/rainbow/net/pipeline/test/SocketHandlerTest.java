@@ -1,4 +1,4 @@
-package damd.rainbow.net;
+package damd.rainbow.net.pipeline.test;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
@@ -10,32 +10,62 @@ import java.nio.ByteBuffer;
 
 import damd.rainbow.behavior.Engine;
 
-public class ByteSocketHandlerTest
+import damd.rainbow.net.SocketListener;
+import damd.rainbow.net.SocketHandler;
+import damd.rainbow.net.SocketHandlerFactory;
+
+import damd.rainbow.net.pipeline.Pipeline;
+import damd.rainbow.net.pipeline.PipelineSource;
+import damd.rainbow.net.pipeline.PipelineTarget;
+import damd.rainbow.net.pipeline.PipelineSocketHandler;
+
+public class SocketHandlerTest
     implements
 	SocketHandlerFactory,
-	BytePipelineTarget
+	PipelineTarget
 {
-    private BytePipelineSource source;
+    private Pipeline pipeline;
+    private PipelineSource source;
 
     // >>> SocketHandlerFactory
 
     public SocketHandler createSocketHandler ()
     {
 	ExecutorService es = Executors.newCachedThreadPool ();
+	PipelineSocketHandler sh = new PipelineSocketHandler (es, es);
 
-	return new ByteSocketHandler (es, es, this);
+	new Pipeline ().add (sh).add (new SocketHandlerTest ());
+
+	return sh;
     }
 
     // <<< SocketHandlerFactory
 
-    // >>> BytePipelineTarget
+    // >>> PipelineNode
 
-    public void setSource (final BytePipelineSource source)
+    public void setPipeline (final Pipeline pipeline)
+    {
+	this.pipeline = pipeline;
+    }
+
+    public void openNode (final short phase)
+    {
+    }
+
+    public void closeNode ()
+    {
+    }
+
+    // <<< PipelineNode
+
+    // >>> PipelineTarget
+
+    public void setSource (final PipelineSource source)
     {
 	this.source = source;
     }
 
-    public void handleInput (ByteBuffer data)
+    public void handleInbound (final ByteBuffer data)
     {
 	long start = System.currentTimeMillis ();
 
@@ -65,14 +95,10 @@ public class ByteSocketHandlerTest
 			    + ")");
 	*/
 
-	source.write (ByteBuffer.wrap ("got it".getBytes ()));
+	source.writeOutbound (ByteBuffer.wrap ("got it".getBytes ()));
     }
 
-    public void cleanup ()
-    {
-    }
-
-    // <<< BytePipelineTarget
+    // <<< PipelineTarget
 
     public static void main (String[] args)
     {
@@ -81,7 +107,7 @@ public class ByteSocketHandlerTest
 	    listener.setListenerAddress (new InetSocketAddress ((InetAddress) null,
 								10000));
 
-	    listener.setHandlerFactory (new ByteSocketHandlerTest ());
+	    listener.setHandlerFactory (new SocketHandlerTest ());
 	    listener.changeState (Engine.State.RUNNING);
 	    while (true) {
 		Thread.sleep (10000);

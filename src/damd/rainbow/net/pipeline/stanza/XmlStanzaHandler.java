@@ -1,4 +1,4 @@
-package damd.rainbow.net;
+package damd.rainbow.net.pipeline.stanza;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -23,13 +23,18 @@ import damd.rainbow.xml.XmlException;
 import damd.rainbow.xml.DomBuilder;
 import damd.rainbow.xml.DomReader;
 
+import damd.rainbow.net.pipeline.PipelineState;
+import damd.rainbow.net.pipeline.Pipeline;
+import damd.rainbow.net.pipeline.PipelineSource;
+import damd.rainbow.net.pipeline.PipelineTarget;
+
 import uk.org.retep.niosax.NioSaxParserFactory;
 import uk.org.retep.niosax.NioSaxParser;
 import uk.org.retep.niosax.NioSaxSource;
 
 public class XmlStanzaHandler
     implements
-	BytePipelineTarget,
+	PipelineTarget,
 	XmlStanzaDelegator,
 	ContentHandler
 {
@@ -37,7 +42,8 @@ public class XmlStanzaHandler
 
     private final XmlStanzaDelegate delegate;
 
-    private BytePipelineSource source;
+    private Pipeline pipeline;
+    private PipelineSource source;
 
     private NioSaxParser parser;
 
@@ -45,32 +51,48 @@ public class XmlStanzaHandler
     private DomBuilder stanza;
 
     public XmlStanzaHandler (final XmlStanzaDelegate delegate)
-	throws SAXException
     {
 	logger = Logger.getLogger (getClass ().getName ());
 
 	this.delegate = delegate;
 	delegate.setDelegator (this);
-
-	parser = NioSaxParserFactory.getInstance ().newInstance ();
-	parser.setHandler (this);
-	parser.startDocument ();
     }
 
-    // >>> BytePipelineTarget
+    // >>> PipelineTarget
 
-    public void setSource (final BytePipelineSource source)
+    public void setSource (final PipelineSource source)
     {
 	this.source = source;
     }
 
-    public void handleInput (final ByteBuffer input)
+    public void handleInbound (final ByteBuffer input)
 	throws SAXException
     {
 	parser.parse (new NioSaxSource (input));
     }
 
-    public void cleanup ()
+    // <<< PipelineTarget
+
+    // >>> PipelineTarget >>> PipelineNode
+
+    public void setPipeline (final Pipeline pipeline)
+    {
+	this.pipeline = pipeline;
+    }
+
+    public void openNode (final short phase)
+	throws SAXException
+    {
+	switch (phase) {
+	case 0:
+	    parser = NioSaxParserFactory.getInstance ().newInstance ();
+	    parser.setHandler (this);
+	    parser.startDocument ();
+	    break;
+	}
+    }
+
+    public void closeNode ()
     {
 	if (null != parser) {
 	    try {
@@ -85,7 +107,7 @@ public class XmlStanzaHandler
 	delegate.cleanup ();
     }
 
-    // <<< BytePipelineTarget
+    // <<< PipelineTarget <<< PipelineNode
 
     // >>> XmlStanzaDelegator
 
@@ -94,7 +116,7 @@ public class XmlStanzaHandler
 	assert (null != source);
 
 	if (null != value && !(value.isEmpty ()))
-	    source.write
+	    source.writeOutbound
 		(ByteBuffer.wrap (value.getBytes (StandardCharsets.UTF_8)));
     }
 
@@ -119,15 +141,15 @@ public class XmlStanzaHandler
 			      final String name,
 			      final Attributes attrs)
     {
-	final ConnectionState state = source.getState ();
+	final PipelineState state = pipeline.getState ();
 
 	element_characters.setLength (0);
 
 	switch (state) {
 	case VALID:
-	    source.setState (delegate.openStream (name, attrs)
-			     ? ConnectionState.OPEN
-			     : ConnectionState.INVALID);
+	    pipeline.setState (delegate.openStream (name, attrs)
+			       ? PipelineState.OPEN
+			       : PipelineState.INVALID);
 	    break;
 	case OPEN:
 	    if (null == stanza) {
@@ -157,7 +179,7 @@ public class XmlStanzaHandler
 			    final String local_name,
 			    final String name)
     {
-	final ConnectionState state = source.getState ();
+	final PipelineState state = pipeline.getState ();
 	final String data = (0 == element_characters.length ()
 			     ? null
 			     : element_characters.toString ());
@@ -168,11 +190,11 @@ public class XmlStanzaHandler
 	case OPEN:
 	    if (null == stanza) {
 		delegate.closeStream ();
-		source.setState (ConnectionState.CLOSING);
+		pipeline.setState (PipelineState.CLOSING);
 	    } else {
 		if (!(stanza.getName ().equals (name))) {
 		    logger.warning ("Unbalanced element found");
-		    source.setState (ConnectionState.INVALID);
+		    pipeline.setState (PipelineState.INVALID);
 		} else {
 		    if (null != data)
 			stanza.addText (data);

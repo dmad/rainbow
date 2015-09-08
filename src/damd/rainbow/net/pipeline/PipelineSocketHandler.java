@@ -1,4 +1,4 @@
-package damd.rainbow.net;
+package damd.rainbow.net.pipeline;
 
 import java.util.Deque;
 import java.util.ArrayDeque;
@@ -18,11 +18,14 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.Selector;
 import java.nio.channels.SelectionKey;
 
-public class ByteSocketHandler
+import damd.rainbow.net.SocketListener;
+import damd.rainbow.net.SocketHandler;
+
+public class PipelineSocketHandler
     implements
 	SocketHandler,
 	Runnable,
-	BytePipelineSource
+	PipelineSource
 {
     private Logger logger;
 
@@ -31,7 +34,8 @@ public class ByteSocketHandler
     private final ExecutorService select_executor;
     private final ExecutorService target_executor;
 
-    private final BytePipelineTarget target;
+    private Pipeline pipeline;
+    private PipelineTarget target;
 
     private SocketListener listener; // sychronized on 'this' for assignment
     private SocketChannel channel; // synchronized on 'this' for assignment
@@ -41,8 +45,6 @@ public class ByteSocketHandler
     private final Deque<ByteBuffer> write_deque; // synchronized on itself
 
     private Selector channel_selector; // not synchronized
-
-    private ConnectionState state; // synchronized on 'this'
 
     // >>> select thread (~ select_future) only, no synchronization
 
@@ -55,17 +57,15 @@ public class ByteSocketHandler
 
     // <<< select thread
 
-    public ByteSocketHandler (final ExecutorService select_executor,
-			      final ExecutorService target_executor,
-			      final BytePipelineTarget target)
+    public PipelineSocketHandler (final ExecutorService select_executor,
+				  final ExecutorService target_executor)
     {
 	logger = Logger.getLogger (getClass ().getName ());
 
 	this.select_executor = select_executor;
 	this.target_executor = target_executor;
-	this.target = target;
 
-	write_deque = new ArrayDeque<ByteBuffer> ();
+	write_deque = new ArrayDeque<> ();
     }
 
     public String toString ()
@@ -73,19 +73,53 @@ public class ByteSocketHandler
 	return getClass ().getName () + "(id(" + id + "))";
     }
 
-    // >>> BytePipelineSource
+    // >>> PipelineNode
 
-    public synchronized ConnectionState getState ()
+    public synchronized void setPipeline (final Pipeline pipeline)
     {
-	return state;
+	assert (null == this.pipeline);
+
+	this.pipeline = pipeline;
     }
 
-    public synchronized void setState (final ConnectionState state)
+    public synchronized void openNode (final short phase)
+	throws IOException
     {
-	this.state = state;
+	assert (null != this.pipeline);
+	assert (null != this.target);
+
+	logger.info ("openNode called");
+
+	switch (phase) {
+	case 0:
+	    if (null == channel_selector || !(channel_selector.isOpen ()))
+		channel_selector = Selector.open ();
+	    break;
+	case 1:
+	    select_future = select_executor.submit (this);
+	    break;
+	}
     }
 
-    public void write (final ByteBuffer value)
+    public synchronized void closeNode ()
+    {
+	try {
+	    close ();
+	} catch (IOException x) {
+	    logger.log (Level.WARNING, "While closing node", x);
+	}
+    }
+
+    // <<< PipelineNode
+
+    // >>> PipelineSource
+
+    public synchronized void setTarget (final PipelineTarget target)
+    {
+	this.target = target;
+    }
+
+    public void writeOutbound (final ByteBuffer value)
     {
 	if (null != value && value.hasRemaining ())
 	    synchronized (write_deque) {
@@ -98,7 +132,7 @@ public class ByteSocketHandler
 	}
     }
 
-    // <<< BytePipelineSource
+    // <<< PipelineSource
 
     // >>> SocketHandler
 
@@ -106,17 +140,15 @@ public class ByteSocketHandler
 				   final SocketListener listener)
 	throws IOException
     {
-	if (null != select_future && !(select_future.isDone ()))
-	    throw new IllegalStateException ("Already open");
+	logger.info ("open called");
+	//if (null != select_future && !(select_future.isDone ()))
+	//    throw new IllegalStateException ("Already open");
 
 	if (channel.isBlocking ())
 	    channel.configureBlocking (false);
 
-	this.listener = listener;
 	this.channel = channel;
-
-	if (null == channel_selector || !(channel_selector.isOpen ()))
-	    channel_selector = Selector.open ();
+	this.listener = listener;
 
 	{
 	    final StringBuilder sb;
@@ -131,15 +163,12 @@ public class ByteSocketHandler
 		    .append (listener.toString ())
 		    .append (")");
 	    }
-
 	    id = sb.toString ();
 	    logger = Logger.getLogger (getClass ().getName ()
 				       + ".instance(" + id + ")");
 	}
 
-	target.setSource (this);
-
-	select_future = select_executor.submit (this);
+	pipeline.open ();
     }
 
     public synchronized void close ()
@@ -161,14 +190,10 @@ public class ByteSocketHandler
 	output_buffer = ByteBuffer.allocateDirect (20480);
 	selection_key = channel.register (channel_selector,
 					  SelectionKey.OP_READ);
-
-	state = ConnectionState.VALID;
     }
 
     private void cleanup ()
     {
-	target.cleanup ();
-
 	input_buffer = null;
 	output_buffer = null;
 
@@ -208,7 +233,7 @@ public class ByteSocketHandler
 	throws
 	    IOException
     {
-	ConnectionState state_snapshot = getState ();
+	PipelineState state_snapshot = pipeline.getState ();
 
 	synchronized (write_deque) {
 	    if (output_buffer.hasRemaining ()
@@ -234,15 +259,15 @@ public class ByteSocketHandler
 	     ? selection_key.interestOps () & ~(SelectionKey.OP_WRITE)
 	     : selection_key.interestOps () | SelectionKey.OP_WRITE);
 
-	if (ConnectionState.CLOSING == state_snapshot)
+	if (PipelineState.CLOSING == state_snapshot)
 	    if (output_buffer.position () > 0)
 		selection_key.interestOps
 		    (selection_key.interestOps ()
 		     & ~(SelectionKey.OP_READ));
 	    else
-		setState (state_snapshot = ConnectionState.CLOSED);
+		pipeline.setState (state_snapshot = PipelineState.CLOSED);
 
-	if (state_snapshot.ordinal () >= ConnectionState.VALID.ordinal ()) {
+	if (state_snapshot.ordinal () >= PipelineState.OPEN.ordinal ()) {
 	    if (channel_selector.select () > 0) {
 		if (selection_key.isReadable ()
 		    && (null == target_future
@@ -253,8 +278,8 @@ public class ByteSocketHandler
 		    read = channel.read (input_buffer);
 
 		    if (read < 0) // end of stream
-			setState (state_snapshot =
-				  ConnectionState.CLOSED);
+			pipeline.setState
+			    (state_snapshot = PipelineState.CLOSED);
 		    else if (read > 0) {
 			input_buffer.flip ();
 			target_future = target_executor.submit
@@ -262,13 +287,14 @@ public class ByteSocketHandler
 				    public void run ()
 				    {
 					try {
-					    target.handleInput (input_buffer);
+					    target.handleInbound (input_buffer);
 					} catch (Throwable x) {
 					    logger.log
 						(Level.WARNING,
 						 "While handling input",
 						 x);
-					    setState (ConnectionState.INVALID);
+					    pipeline.setState
+						(PipelineState.INVALID);
 					}
 				    }
 				});
@@ -297,7 +323,8 @@ public class ByteSocketHandler
 	try {
 	    setup ();
 
-	    while (getState ().ordinal () >= ConnectionState.VALID.ordinal ())
+	    while (pipeline.getState ().ordinal ()
+		   >= PipelineState.OPEN.ordinal ())
 		select ();
 	} catch (ClosedSelectorException x) {
 	    // swallow, requested to stop
@@ -307,9 +334,9 @@ public class ByteSocketHandler
 	    logger.log (Level.SEVERE, "While interacting with channel", x);
 	} finally {
 	    try {
-		cleanup ();
+		pipeline.close ();
 	    } catch (Throwable x) {
-		logger.log (Level.WARNING, "While cleaning up", x);
+		logger.log (Level.WARNING, "While closing pipeline", x);
 	    }
 	}
 
