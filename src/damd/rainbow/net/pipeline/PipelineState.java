@@ -2,7 +2,7 @@ package damd.rainbow.net.pipeline;
 
 public enum PipelineState
 {
-    INVALID, // CLOSED but its state is invalid
+    INVALID, // OPEN or CLOSED but its state is invalid
     CLOSED,  // CLOSED logically and physically
     OPEN,    // OPEN physically but not logically yet (no data yet)
     VALID,   // OPEN physically and logically

@@ -146,12 +146,13 @@ public class XmlStanzaHandler
 	element_characters.setLength (0);
 
 	switch (state) {
-	case VALID:
-	    pipeline.setState (delegate.openStream (name, attrs)
-			       ? PipelineState.OPEN
-			       : PipelineState.INVALID);
-	    break;
 	case OPEN:
+	    if (delegate.openStream (name, attrs))
+		pipeline.validate ();
+	    else
+		pipeline.invalidate ("Invalid stream", null);
+	    break;
+	case VALID:
 	    if (null == stanza) {
 		try {
 		    stanza = new DomBuilder (name);
@@ -187,14 +188,13 @@ public class XmlStanzaHandler
 	element_characters.setLength (0);
 
 	switch (state) {
-	case OPEN:
+	case VALID:
 	    if (null == stanza) {
 		delegate.closeStream ();
-		pipeline.setState (PipelineState.CLOSING);
+		pipeline.startClosing ();
 	    } else {
 		if (!(stanza.getName ().equals (name))) {
-		    logger.warning ("Unbalanced element found");
-		    pipeline.setState (PipelineState.INVALID);
+		    pipeline.invalidate ("Unbalanced element found", null);
 		} else {
 		    if (null != data)
 			stanza.addText (data);

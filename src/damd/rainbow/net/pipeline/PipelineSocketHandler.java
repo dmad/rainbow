@@ -174,6 +174,8 @@ public class PipelineSocketHandler
     public synchronized void close ()
 	throws IOException
     {
+	/* The thread (~ select_future) handles the connection, ask
+	   it to stop (if it is not already stopped). */
 	if (null != channel_selector
 	    && null != select_future && !(select_future.isDone ()))
 	    channel_selector.close ();
@@ -229,11 +231,14 @@ public class PipelineSocketHandler
 	}
     }
 
-    private void select ()
+    private boolean select ()
 	throws
 	    IOException
     {
-	PipelineState state_snapshot = pipeline.getState ();
+	boolean keep_going = pipeline.isUsable ();
+
+	if (!keep_going)
+	    return keep_going;
 
 	synchronized (write_deque) {
 	    if (output_buffer.hasRemaining ()
@@ -259,15 +264,17 @@ public class PipelineSocketHandler
 	     ? selection_key.interestOps () & ~(SelectionKey.OP_WRITE)
 	     : selection_key.interestOps () | SelectionKey.OP_WRITE);
 
-	if (PipelineState.CLOSING == state_snapshot)
-	    if (output_buffer.position () > 0)
-		selection_key.interestOps
-		    (selection_key.interestOps ()
-		     & ~(SelectionKey.OP_READ));
-	    else
-		pipeline.setState (state_snapshot = PipelineState.CLOSED);
+	if (PipelineState.CLOSING == pipeline.getState ()) {
+	    if (output_buffer.position () > 0) { // still need to write
+		if (0 != (selection_key.interestOps () & SelectionKey.OP_READ))
+		    selection_key.interestOps
+			(selection_key.interestOps ()
+			 & ~(SelectionKey.OP_READ)); // stop reading
+	    } else // stop socket handler
+		keep_going = false;
+	}
 
-	if (state_snapshot.ordinal () >= PipelineState.OPEN.ordinal ()) {
+	if (keep_going) {
 	    if (channel_selector.select () > 0) {
 		if (selection_key.isReadable ()
 		    && (null == target_future
@@ -278,8 +285,7 @@ public class PipelineSocketHandler
 		    read = channel.read (input_buffer);
 
 		    if (read < 0) // end of stream
-			pipeline.setState
-			    (state_snapshot = PipelineState.CLOSED);
+			keep_going = false;
 		    else if (read > 0) {
 			input_buffer.flip ();
 			target_future = target_executor.submit
@@ -289,12 +295,8 @@ public class PipelineSocketHandler
 					try {
 					    target.handleInbound (input_buffer);
 					} catch (Throwable x) {
-					    logger.log
-						(Level.WARNING,
-						 "While handling input",
-						 x);
-					    pipeline.setState
-						(PipelineState.INVALID);
+					    pipeline.invalidate
+						("While handling input", x);
 					}
 				    }
 				});
@@ -314,6 +316,8 @@ public class PipelineSocketHandler
 		channel_selector.selectedKeys ().clear ();
 	    }
 	}
+
+	return keep_going;
     }
 
     public void run ()
@@ -323,9 +327,9 @@ public class PipelineSocketHandler
 	try {
 	    setup ();
 
-	    while (pipeline.getState ().ordinal ()
-		   >= PipelineState.OPEN.ordinal ())
-		select ();
+	    while (pipeline.isUsable ())
+		if (!select ())
+		    break;
 	} catch (ClosedSelectorException x) {
 	    // swallow, requested to stop
 	} catch (IOException x) {
@@ -334,6 +338,7 @@ public class PipelineSocketHandler
 	    logger.log (Level.SEVERE, "While interacting with channel", x);
 	} finally {
 	    try {
+		cleanup ();
 		pipeline.close ();
 	    } catch (Throwable x) {
 		logger.log (Level.WARNING, "While closing pipeline", x);

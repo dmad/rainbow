@@ -2,16 +2,21 @@ package damd.rainbow.net.pipeline;
 
 import java.util.ArrayList;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 public class Pipeline
 {
+    private Logger logger;
     private ArrayList<PipelineNode> nodes;
-    private boolean is_open;
+    private boolean nodes_have_been_closed;
     private PipelineState state;
 
     public Pipeline ()
     {
+	logger = Logger.getLogger (getClass ().getName ());
 	nodes = new ArrayList<> (3);
-	state = PipelineState.CLOSED;
+	setState (PipelineState.CLOSED);
     }
 
     public synchronized Pipeline add (final PipelineNode node)
@@ -27,9 +32,9 @@ public class Pipeline
 	    throw new IllegalArgumentException
 		("Node(" + node + ") already in pipeline");
 
-	if (isOpen ())
+	if (isUsable ())
 	    throw new IllegalStateException
-		("You can not add a node if the pipeline is open");
+		("You can not add a node if the pipeline is in use");
 
 	node.setPipeline (this);
 	nodes.add (node);
@@ -37,16 +42,61 @@ public class Pipeline
 	return this;
     }
 
-    public synchronized boolean isOpen ()
+    public synchronized PipelineState getState ()
     {
-	return state.ordinal () > PipelineState.CLOSED.ordinal ();
+	return state;
+    }
+
+    private synchronized void setState (final PipelineState state)
+    {
+	logger.info ("Changing pipeline state from("
+		     + this.state
+		     + ") to ("
+		     + state + ")");
+
+	this.state = state;
+    }
+
+    public synchronized boolean isUsable ()
+    {
+	return state.ordinal () >= PipelineState.OPEN.ordinal ();
+    }
+
+    public synchronized void validate ()
+	throws IllegalStateException
+    {
+	switch (state) {
+	case OPEN:
+	    setState (PipelineState.VALID);
+	    break;
+	case VALID:
+	    // ignore
+	    break;
+	default:
+	    throw new IllegalStateException
+		("Can not validate a pipeline that is "
+		 + state);
+	}
+    }
+
+    public synchronized void invalidate (final String message,
+					 final Throwable x)
+    {
+	setState (PipelineState.INVALID);
+	logger.log (Level.WARNING, message, x);
+    }
+
+    public synchronized void startClosing ()
+    {
+	if (isUsable ())
+	    setState (PipelineState.CLOSING);
     }
 
     public synchronized void open ()
 	throws
 	    IllegalStateException
     {
-	if (isOpen ())
+	if (state.ordinal () > PipelineState.CLOSED.ordinal ())
 	    throw new IllegalStateException ("Already open");
 
 	// check validity of nodes
@@ -94,7 +144,8 @@ public class Pipeline
 		for (int n = 0;n < nodes.size ();++n)
 		    nodes.get (n).openNode (phase);
 
-	    state = PipelineState.VALID;
+	    setState (PipelineState.OPEN);
+	    nodes_have_been_closed = false;
 	} catch (Throwable x) {
 	    for (int n = 0;n < nodes.size ();++n)
 		nodes.get (n).closeNode ();
@@ -103,22 +154,15 @@ public class Pipeline
 
     public synchronized void close ()
     {
-	if (isOpen ()) {
+	if (!nodes_have_been_closed) {
 	    // from final target to initial source
 	    for (int n = nodes.size () - 1;n >= 0;--n)
 		nodes.get (n).closeNode ();
 
-	    state = PipelineState.CLOSED;
+	    if (PipelineState.INVALID != state)
+		setState (PipelineState.CLOSED);
+
+	    nodes_have_been_closed = true;
 	}
-    }
-
-    public synchronized PipelineState getState ()
-    {
-	return state;
-    }
-
-    public synchronized void setState (final PipelineState state)
-    {
-	this.state = state;
     }
 }
