@@ -9,4 +9,7 @@ public interface PipelineTarget
 
     public void handleInbound (ByteBuffer data)
 	throws Exception;
+
+    public void giveOutbound (ByteBuffer data)
+	throws Exception;
 }

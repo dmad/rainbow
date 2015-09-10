@@ -7,5 +7,5 @@ public interface PipelineSource
 {
     public void setTarget (PipelineTarget target);
 
-    public void writeOutbound (ByteBuffer data);
+    public void handleTargetEvent (PipelineEvent event);
 }

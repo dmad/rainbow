@@ -19,18 +19,20 @@ import org.xml.sax.Locator;
 import org.xml.sax.Attributes;
 import org.xml.sax.ContentHandler;
 
+import uk.org.retep.niosax.NioSaxParserFactory;
+import uk.org.retep.niosax.NioSaxParser;
+import uk.org.retep.niosax.NioSaxSource;
+
 import damd.rainbow.xml.XmlException;
 import damd.rainbow.xml.DomBuilder;
 import damd.rainbow.xml.DomReader;
 
 import damd.rainbow.net.pipeline.PipelineState;
+import damd.rainbow.net.pipeline.PipelineEvent;
 import damd.rainbow.net.pipeline.Pipeline;
 import damd.rainbow.net.pipeline.PipelineSource;
 import damd.rainbow.net.pipeline.PipelineTarget;
-
-import uk.org.retep.niosax.NioSaxParserFactory;
-import uk.org.retep.niosax.NioSaxParser;
-import uk.org.retep.niosax.NioSaxSource;
+import damd.rainbow.net.pipeline.BufferedOutbound;
 
 public class XmlStanzaHandler
     implements
@@ -44,6 +46,8 @@ public class XmlStanzaHandler
 
     private Pipeline pipeline;
     private PipelineSource source;
+
+    private BufferedOutbound buffered_outbound;
 
     private NioSaxParser parser;
 
@@ -71,6 +75,11 @@ public class XmlStanzaHandler
 	parser.parse (new NioSaxSource (input));
     }
 
+    public void giveOutbound (final ByteBuffer outbound)
+    {
+	buffered_outbound.giveOutbound (outbound);
+    }
+
     // <<< PipelineTarget
 
     // >>> PipelineTarget >>> PipelineNode
@@ -85,6 +94,7 @@ public class XmlStanzaHandler
     {
 	switch (phase) {
 	case 0:
+	    buffered_outbound = new BufferedOutbound (source);
 	    parser = NioSaxParserFactory.getInstance ().newInstance ();
 	    parser.setHandler (this);
 	    parser.startDocument ();
@@ -104,6 +114,8 @@ public class XmlStanzaHandler
 	    }
 	}
 
+	buffered_outbound = null;
+
 	delegate.cleanup ();
     }
 
@@ -116,7 +128,7 @@ public class XmlStanzaHandler
 	assert (null != source);
 
 	if (null != value && !(value.isEmpty ()))
-	    source.writeOutbound
+	    buffered_outbound.write
 		(ByteBuffer.wrap (value.getBytes (StandardCharsets.UTF_8)));
     }
 

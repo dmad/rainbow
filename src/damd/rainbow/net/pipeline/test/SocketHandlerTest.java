@@ -14,10 +14,12 @@ import damd.rainbow.net.SocketListener;
 import damd.rainbow.net.SocketHandler;
 import damd.rainbow.net.SocketHandlerFactory;
 
+import damd.rainbow.net.pipeline.PipelineEvent;
 import damd.rainbow.net.pipeline.Pipeline;
 import damd.rainbow.net.pipeline.PipelineSource;
 import damd.rainbow.net.pipeline.PipelineTarget;
 import damd.rainbow.net.pipeline.PipelineSocketHandler;
+import damd.rainbow.net.pipeline.BufferedOutbound;
 
 public class SocketHandlerTest
     implements
@@ -26,6 +28,8 @@ public class SocketHandlerTest
 {
     private Pipeline pipeline;
     private PipelineSource source;
+
+    private BufferedOutbound buffered_outbound;
 
     // >>> SocketHandlerFactory
 
@@ -50,10 +54,12 @@ public class SocketHandlerTest
 
     public void openNode (final short phase)
     {
+	buffered_outbound = new BufferedOutbound (source);
     }
 
     public void closeNode ()
     {
+	buffered_outbound = null;
     }
 
     // <<< PipelineNode
@@ -68,6 +74,7 @@ public class SocketHandlerTest
     public void handleInbound (final ByteBuffer data)
     {
 	long start = System.currentTimeMillis ();
+	int size = data.remaining ();
 
 	System.out.println ("before read: position(" + data.position ()
 			    + ") limit(" + data.limit ()
@@ -86,16 +93,17 @@ public class SocketHandlerTest
 			    + ") remaining(" + data.remaining ()
 			    + ")");
 
-	/*
-	data.compact ();
+	// 'consume' all data
+	data.position (data.limit ());
 
-	System.out.println ("after compact: position(" + data.position ()
-			    + ") limit(" + data.limit ()
-			    + ") remaining(" + data.remaining ()
-			    + ")");
-	*/
+	buffered_outbound.write
+	    (ByteBuffer.wrap
+	     (("got " + size + " bytes").getBytes ()));
+    }
 
-	source.writeOutbound (ByteBuffer.wrap ("got it".getBytes ()));
+    public void giveOutbound (final ByteBuffer outbound)
+    {
+	buffered_outbound.giveOutbound (outbound);
     }
 
     // <<< PipelineTarget

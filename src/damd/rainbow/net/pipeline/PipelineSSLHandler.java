@@ -1,11 +1,14 @@
 package damd.rainbow.net.pipeline;
 
+import java.util.ArrayList;
+
 import java.util.logging.Logger;
 
 import java.nio.ByteBuffer;
 
 import java.security.NoSuchAlgorithmException;
 
+import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 
@@ -21,6 +24,8 @@ public class PipelineSSLHandler
     private PipelineSource source;
 
     private boolean client_mode;
+
+    private ArrayList<KeyManager> key_mngrs;
     private SSLEngine engine;
 
     public PipelineSSLHandler ()
@@ -38,11 +43,13 @@ public class PipelineSSLHandler
     public void openNode (final short phase)
 	throws NoSuchAlgorithmException
     {
-	switch (phase) {
-	case 0:
-	    engine = SSLContext.getInstance ("TLSv1.2").createSSLEngine ();
+	if (0 == phase) {
+	    final SSLContext context = SSLContext.getInstance ("TLSv1.2");
+
+	    engine = context.createSSLEngine ();
 	    engine.setUseClientMode (client_mode);
-	    break;
+	    if (!client_mode)
+		engine.setNeedClientAuth (false);
 	}
     }
 
@@ -62,6 +69,13 @@ public class PipelineSSLHandler
     public void handleInbound (final ByteBuffer data)
 	throws Exception
     {
+	// TODO: implement
+    }
+
+    public void giveOutbound (final ByteBuffer data)
+	throws Exception
+    {
+	// TODO: implement
     }
 
     // <<< PipelineTarget
@@ -73,9 +87,16 @@ public class PipelineSSLHandler
 	this.target = target;
     }
 
-    public void writeOutbound (final ByteBuffer value)
+    public void handleTargetEvent (final PipelineEvent event)
     {
+	// TODO: implement
     }
 
     // <<< PipelineSource
+
+    public void addKeyManagers (final KeyManager[] mngrs)
+    {
+	for (final KeyManager key_mngr : key_mngrs)
+	    this.key_mngrs.add (key_mngr);
+    }
 }

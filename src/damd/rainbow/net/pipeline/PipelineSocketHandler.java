@@ -1,8 +1,5 @@
 package damd.rainbow.net.pipeline;
 
-import java.util.Deque;
-import java.util.ArrayDeque;
-
 import java.util.concurrent.Future;
 import java.util.concurrent.ExecutorService;
 
@@ -42,14 +39,12 @@ public class PipelineSocketHandler
 
     private Future<?> select_future; // synchronized on 'this' for assignment
 
-    private final Deque<ByteBuffer> write_deque; // synchronized on itself
-
     private Selector channel_selector; // not synchronized
 
     // >>> select thread (~ select_future) only, no synchronization
 
-    private ByteBuffer input_buffer;
-    private ByteBuffer output_buffer;
+    private ByteBuffer inbound_buffer;
+    private ByteBuffer outbound_buffer;
 
     private SelectionKey selection_key;
 
@@ -64,8 +59,6 @@ public class PipelineSocketHandler
 
 	this.select_executor = select_executor;
 	this.target_executor = target_executor;
-
-	write_deque = new ArrayDeque<> ();
     }
 
     public String toString ()
@@ -88,12 +81,14 @@ public class PipelineSocketHandler
 	assert (null != this.pipeline);
 	assert (null != this.target);
 
-	logger.info ("openNode called");
-
 	switch (phase) {
 	case 0:
-	    if (null == channel_selector || !(channel_selector.isOpen ()))
-		channel_selector = Selector.open ();
+	    inbound_buffer = ByteBuffer.allocateDirect (20480);
+	    outbound_buffer = ByteBuffer.allocateDirect (20480);
+
+	    channel_selector = Selector.open ();
+	    selection_key = channel.register (channel_selector,
+					      SelectionKey.OP_READ);
 	    break;
 	case 1:
 	    select_future = select_executor.submit (this);
@@ -119,16 +114,13 @@ public class PipelineSocketHandler
 	this.target = target;
     }
 
-    public void writeOutbound (final ByteBuffer value)
+    public synchronized void handleTargetEvent (final PipelineEvent event)
     {
-	if (null != value && value.hasRemaining ())
-	    synchronized (write_deque) {
-		write_deque.offerLast (value.slice ());
-	    }
-
-	synchronized (this) {
+	switch (event) {
+	case OUTBOUND_AVAILABLE:
 	    if (null != select_future && !(select_future.isDone ()))
 		channel_selector.wakeup ();
+	    break;
 	}
     }
 
@@ -140,9 +132,8 @@ public class PipelineSocketHandler
 				   final SocketListener listener)
 	throws IOException
     {
-	logger.info ("open called");
-	//if (null != select_future && !(select_future.isDone ()))
-	//    throw new IllegalStateException ("Already open");
+	if (null != select_future && !(select_future.isDone ()))
+	    throw new IllegalStateException ("Already open");
 
 	if (channel.isBlocking ())
 	    channel.configureBlocking (false);
@@ -185,19 +176,10 @@ public class PipelineSocketHandler
 
     // >>> Runnable
 
-    private void setup ()
-	throws IOException
-    {
-	input_buffer = ByteBuffer.allocateDirect (20480);
-	output_buffer = ByteBuffer.allocateDirect (20480);
-	selection_key = channel.register (channel_selector,
-					  SelectionKey.OP_READ);
-    }
-
     private void cleanup ()
     {
-	input_buffer = null;
-	output_buffer = null;
+	inbound_buffer = null;
+	outbound_buffer = null;
 
 	if (null != channel_selector) {
 	    try {
@@ -233,39 +215,24 @@ public class PipelineSocketHandler
 
     private boolean select ()
 	throws
-	    IOException
+	    IOException,
+	    Exception
     {
 	boolean keep_going = pipeline.isUsable ();
 
 	if (!keep_going)
 	    return keep_going;
 
-	synchronized (write_deque) {
-	    if (output_buffer.hasRemaining ()
-		&& !(write_deque.isEmpty ())) {
-		ByteBuffer src = write_deque.pollFirst ();
-
-		if (src.remaining () > output_buffer.remaining ()) {
-		    int prev_src_limit = src.limit ();
-
-		    src.limit (src.position () + output_buffer.remaining ());
-		    output_buffer.put (src);
-		    src.limit (prev_src_limit);
-		} else
-		    output_buffer.put (src);
-
-		if (src.hasRemaining ())
-		    write_deque.offerFirst (src);
-	    }
-	}
+	if (outbound_buffer.hasRemaining ())
+	    target.giveOutbound (outbound_buffer);
 
 	selection_key.interestOps
-	    (0 == output_buffer.position ()
+	    (0 == outbound_buffer.position ()
 	     ? selection_key.interestOps () & ~(SelectionKey.OP_WRITE)
 	     : selection_key.interestOps () | SelectionKey.OP_WRITE);
 
 	if (PipelineState.CLOSING == pipeline.getState ()) {
-	    if (output_buffer.position () > 0) { // still need to write
+	    if (outbound_buffer.position () > 0) { // still need to write
 		if (0 != (selection_key.interestOps () & SelectionKey.OP_READ))
 		    selection_key.interestOps
 			(selection_key.interestOps ()
@@ -281,19 +248,20 @@ public class PipelineSocketHandler
 			|| target_future.isDone ())) {
 		    final int read;
 
-		    input_buffer.compact ();
-		    read = channel.read (input_buffer);
+		    inbound_buffer.compact ();
+		    read = channel.read (inbound_buffer);
 
 		    if (read < 0) // end of stream
 			keep_going = false;
 		    else if (read > 0) {
-			input_buffer.flip ();
+			inbound_buffer.flip ();
 			target_future = target_executor.submit
 			    (new Runnable () {
 				    public void run ()
 				    {
 					try {
-					    target.handleInbound (input_buffer);
+					    target.handleInbound
+						(inbound_buffer);
 					} catch (Throwable x) {
 					    pipeline.invalidate
 						("While handling input", x);
@@ -304,12 +272,12 @@ public class PipelineSocketHandler
 		}
 
 		if (selection_key.isWritable ()
-		    && output_buffer.position () > 0) {
-		    output_buffer.flip ();
+		    && outbound_buffer.position () > 0) {
+		    outbound_buffer.flip ();
 		    try {
-			channel.write (output_buffer);
+			channel.write (outbound_buffer);
 		    } finally {
-			output_buffer.compact ();
+			outbound_buffer.compact ();
 		    }
 		}
 
@@ -325,8 +293,6 @@ public class PipelineSocketHandler
 	logger.fine ("Starting to handle socket");
 
 	try {
-	    setup ();
-
 	    while (pipeline.isUsable ())
 		if (!select ())
 		    break;
