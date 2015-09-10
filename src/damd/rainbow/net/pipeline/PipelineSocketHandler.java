@@ -218,9 +218,14 @@ public class PipelineSocketHandler
 	    IOException,
 	    Exception
     {
+	final boolean no_target_future =
+	    null == target_future || target_future.isDone ();
 	boolean keep_going = pipeline.isUsable ();
 	boolean read = false, write = false;
 
+	/* Defensive check, keep_going should never be false
+	   at this spot */
+	assert (keep_going);
 	if (!keep_going)
 	    return keep_going;
 
@@ -230,11 +235,12 @@ public class PipelineSocketHandler
 	write = outbound_buffer.position () > 0;
 
 	if (PipelineState.CLOSING == pipeline.getState ()) {
-	    /* We do not read anymore, but we maybe need to flush
-	       our outbound_buffer */
-	    if (!write) // nothing to write, stop socket handler
+	    /* We do not read anymore, but we maybe we stil need to:
+	       - flush our outbound_buffer
+	       - wait for target_future to finish */
+	    if (!write && no_target_future)
 		keep_going = false;
-	} else if (null == target_future || target_future.isDone ())
+	} else if (no_target_future)
 	    read = true;
 
 	selection_key.interestOps
@@ -245,8 +251,7 @@ public class PipelineSocketHandler
 
 	if (keep_going && channel_selector.select () > 0) {
 	    if (selection_key.isReadable ()) {
-		assert (null == target_future
-			|| target_future.isDone ());
+		assert (no_target_future);
 		final int read_count;
 
 		inbound_buffer.compact ();

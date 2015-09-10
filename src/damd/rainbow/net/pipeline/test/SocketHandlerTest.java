@@ -99,6 +99,15 @@ public class SocketHandlerTest
 	buffered_outbound.write
 	    (ByteBuffer.wrap
 	     (("got " + size + " bytes").getBytes ()));
+
+	if (size > 10) {
+	    pipeline.startClosing ();
+	    try {
+		Thread.sleep (10000);
+	    } catch (InterruptedException x) {
+		// swallow
+	    }
+	}
     }
 
     public void giveOutbound (final ByteBuffer outbound)
