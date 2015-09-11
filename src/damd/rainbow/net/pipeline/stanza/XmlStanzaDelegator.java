@@ -9,4 +9,5 @@ public interface XmlStanzaDelegator
     public void write (String value);
     public void write (DomReader stanza);
     public void write (Document stanza);
+    public void flush ();
 }

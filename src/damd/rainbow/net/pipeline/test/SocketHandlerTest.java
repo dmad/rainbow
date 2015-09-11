@@ -38,7 +38,10 @@ public class SocketHandlerTest
 	ExecutorService es = Executors.newCachedThreadPool ();
 	PipelineSocketHandler sh = new PipelineSocketHandler (es, es);
 
-	new Pipeline ().add (sh).add (new SocketHandlerTest ());
+	new Pipeline ()
+	    .add (sh)
+	    .add (new PipelineInterceptor ())
+	    .add (new SocketHandlerTest ());
 
 	return sh;
     }

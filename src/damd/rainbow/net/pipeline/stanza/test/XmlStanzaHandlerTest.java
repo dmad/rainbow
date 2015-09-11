@@ -83,9 +83,12 @@ public class XmlStanzaHandlerTest
 
     public void handleStanza (final Document stanza)
     {
-	delegator.write ("<got>");
-	delegator.write (stanza);
-	delegator.write ("</got>");
+	for (int i = 0;i < 1000;++i) {
+	    delegator.write ("<got>");
+	    delegator.write (stanza);
+	    delegator.write ("</got>");
+	}
+	delegator.flush ();
     }
 
     public void cleanup ()

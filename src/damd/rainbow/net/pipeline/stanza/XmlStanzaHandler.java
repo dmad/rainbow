@@ -95,6 +95,7 @@ public class XmlStanzaHandler
 	switch (phase) {
 	case 0:
 	    buffered_outbound = new BufferedOutbound (source);
+	    buffered_outbound.setAutoFlush (false);
 	    parser = NioSaxParserFactory.getInstance ().newInstance ();
 	    parser.setHandler (this);
 	    parser.startDocument ();
@@ -122,6 +123,11 @@ public class XmlStanzaHandler
     // <<< PipelineTarget <<< PipelineNode
 
     // >>> XmlStanzaDelegator
+
+    public void flush ()
+    {
+	buffered_outbound.flush ();
+    }
 
     public void write (final String value)
     {
