@@ -132,7 +132,7 @@ public class SocketListener
 		} catch (Exception x) {
 		    logger.log (Level.SEVERE,
 				"While creating/opening SocketHandler("
-				+ handler.toString ()
+				+ handler
 				+ ")",
 				x);
 		    removeHandler (handler);
