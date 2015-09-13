@@ -69,37 +69,57 @@ public class PipelineInterceptor
 	logger.info ("setSource called");
     }
 
-    public void handleInbound (final ByteBuffer data)
+    public void handleInbound (final ByteBuffer buffer)
 	throws Exception
     {
-	final int prev_pos = data.position ();
-	final StringBuilder output;
-
-	output = new StringBuilder ("handleInbound called with")
-	    .append (" position(" + data.position ()
-		     + ") limit(" + data.limit ()
-		     + ") data(");
-	while (data.hasRemaining ()) {
-	    final byte b = data.get ();
-
-	    output.append (Byte.toString (b));
-	    if (data.hasRemaining ())
-		output.append (" ");
-	}
-	output.append (")");
-
-	data.position (prev_pos);
-
-	logger.info (output.toString ());
-	target.handleInbound (data);
+	logger.info ("handleInbound called with buffer("
+		     + byteBufferToString (buffer, false)
+		     + ")");
+	target.handleInbound (buffer);
     }
 
-    public void giveOutbound (final ByteBuffer data)
+    public void giveOutbound (final ByteBuffer buffer)
 	throws Exception
     {
-	logger.info ("giveOutbound called");
-	target.giveOutbound (data);
+	target.giveOutbound (buffer);
+	logger.info ("giveOutbound called with buffer("
+		     + byteBufferToString (buffer, true)
+		     + ")");
     }
 
     // <<< PipelineTarget
+
+    public static String byteBufferToString (final ByteBuffer buffer,
+					     final boolean flip)
+    {
+	final int prev_pos = buffer.position ();
+	final int prev_limit = buffer.limit ();
+	final StringBuilder output;
+
+	//if (flip)
+	//  buffer.flip ();
+
+	output = new StringBuilder ()
+	    .append ("position(" + buffer.position ()
+		     + ") limit(" + buffer.limit ()
+		     + ") remaining(" + buffer.remaining ()
+		     + ") needs flip(" + flip
+		     + ")");
+	/*
+		     + ") buffer(");
+	for (int i = 0;i < 40 && buffer.hasRemaining ();++i) {
+	    final byte b = buffer.get ();
+
+	    output.append (Integer.toHexString ((int) b));
+	    if (buffer.hasRemaining ())
+		output.append (" ");
+	}
+	output.append (")");
+	*/
+
+	//buffer.limit (prev_limit);
+	//buffer.position (prev_pos);
+
+	return output.toString ();
+    }
 }

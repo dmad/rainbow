@@ -1,5 +1,6 @@
 package damd.rainbow.net.pipeline;
 
+import java.util.List;
 import java.util.ArrayList;
 
 import java.util.logging.Logger;
@@ -7,9 +8,13 @@ import java.util.logging.Logger;
 import java.nio.ByteBuffer;
 
 import java.security.NoSuchAlgorithmException;
+import java.security.KeyManagementException;
+import java.security.SecureRandom;
 
 import javax.net.ssl.KeyManager;
+import javax.net.ssl.TrustManager;
 import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngine;
 
 public class PipelineSSLHandler
@@ -25,12 +30,19 @@ public class PipelineSSLHandler
 
     private boolean client_mode;
 
-    private ArrayList<KeyManager> key_mngrs;
+    private List<KeyManager> key_mngrs;
+    private List<TrustManager> trust_mngrs;
+    private SecureRandom secure_random;
     private SSLEngine engine;
+
+    private ByteBuffer inbound_buffer;
+    private ByteBuffer outbound_buffer;
 
     public PipelineSSLHandler ()
     {
 	logger = Logger.getLogger (getClass ().getName ());
+	key_mngrs = new ArrayList<> ();
+	trust_mngrs = new ArrayList<> ();
     }
 
     // >>> PipelineNode
@@ -41,15 +53,25 @@ public class PipelineSSLHandler
     }
 
     public void openNode (final short phase)
-	throws NoSuchAlgorithmException
+	throws
+	    NoSuchAlgorithmException,
+	    KeyManagementException
     {
 	if (0 == phase) {
 	    final SSLContext context = SSLContext.getInstance ("TLSv1.2");
 
+	    context.init (key_mngrs.toArray (new KeyManager[0]),
+			  trust_mngrs.toArray (new TrustManager[0]),
+			  secure_random);
 	    engine = context.createSSLEngine ();
 	    engine.setUseClientMode (client_mode);
 	    if (!client_mode)
 		engine.setNeedClientAuth (false);
+
+	    inbound_buffer = ByteBuffer.allocate
+		(engine.getSession ().getApplicationBufferSize ());
+	    outbound_buffer = ByteBuffer.allocate
+		(engine.getSession ().getApplicationBufferSize ());
 	}
     }
 
@@ -66,16 +88,93 @@ public class PipelineSSLHandler
 	this.source = source;
     }
 
-    public void handleInbound (final ByteBuffer data)
+    public void handleInbound (final ByteBuffer buffer)
 	throws Exception
     {
-	// TODO: implement
+	for (boolean keep_unwrapping = true;keep_unwrapping;) {
+	    final SSLEngineResult result;
+
+	    System.out.println ("before unwrap buffer("
+				+ buffer
+				+ ")\n\tinbound_buffer("
+				+ inbound_buffer
+				+")");
+	    result = engine.unwrap (buffer, inbound_buffer);
+	    System.out.println ("after unwrap buffer("
+				+ buffer
+				+ ")\n\tinbound_buffer("
+				+ inbound_buffer
+				+ ")\n\tresult("
+				+ result
+				+ ")");
+	    switch (result.getHandshakeStatus ()) {
+	    case NEED_TASK:
+		runDelegatedTasks (result);
+		keep_unwrapping = false;
+		break;
+	    case NEED_UNWRAP:
+		keep_unwrapping = true;
+		break;
+	    case NEED_WRAP:
+		source.handleTargetEvent (PipelineEvent.OUTBOUND_AVAILABLE);
+		keep_unwrapping = false;
+		break;
+	    default:
+		keep_unwrapping = false;
+		break;
+	    }
+	}
+
+	if (inbound_buffer.position () > 0) {
+	    inbound_buffer.flip ();
+	    try {
+		target.handleInbound (inbound_buffer);
+	    } finally {
+		inbound_buffer.compact ();
+	    }
+	}
     }
 
-    public void giveOutbound (final ByteBuffer data)
+    public void giveOutbound (final ByteBuffer buffer)
 	throws Exception
     {
-	// TODO: implement
+	final SSLEngineResult result;
+	final boolean target_has_data;
+
+	System.out.println ("before target.giveOutbound buffer("
+			    + buffer
+			    + ")\n\toutbound_buffer("
+			    + outbound_buffer
+			    + ")");
+	target.giveOutbound (outbound_buffer);
+	target_has_data = outbound_buffer.position () > 0;
+	System.out.println ("after target.giveOutbound buffer("
+			    + buffer
+			    + ")\n\toutbound_buffer("
+			    + outbound_buffer
+			    + ")\n\ttarget_has_data("
+			    + target_has_data
+			    + ")");
+
+	if (target_has_data)
+	    outbound_buffer.flip ();
+
+	/* always run engine.wrap as it may produce data
+	   even if there is no data from the target */
+	try {
+	    result = engine.wrap (outbound_buffer, buffer);
+	    System.out.println ("after wrap buffer("
+				+ buffer
+				+ ")\n\toutbound_buffer("
+				+ outbound_buffer
+				+ ")\n\tresult("
+				+ result
+				+ ")");
+	    runDelegatedTasks (result);
+	} finally {
+	    if (target_has_data)
+		outbound_buffer.compact ();
+	}
     }
 
     // <<< PipelineTarget
@@ -89,14 +188,37 @@ public class PipelineSSLHandler
 
     public void handleTargetEvent (final PipelineEvent event)
     {
-	// TODO: implement
+	source.handleTargetEvent (event);
     }
 
     // <<< PipelineSource
 
-    public void addKeyManagers (final KeyManager[] mngrs)
+    public void addKeyManagers (final KeyManager[] key_mngrs)
     {
 	for (final KeyManager key_mngr : key_mngrs)
 	    this.key_mngrs.add (key_mngr);
+    }
+
+    public void addTrustManagers (final TrustManager[] trust_mngrs)
+    {
+	for (final TrustManager trust_mngr : trust_mngrs)
+	    this.trust_mngrs.add (trust_mngr);
+    }
+
+    public void setSecureRandom (final SecureRandom rnd)
+    {
+	this.secure_random = rnd;
+    }
+
+    private void runDelegatedTasks (final SSLEngineResult result)
+    {
+	switch (result.getHandshakeStatus ()) {
+	case NEED_TASK:
+	    for (Runnable task = engine.getDelegatedTask ();
+		 null != task;
+		 task = engine.getDelegatedTask ())
+		task.run ();
+	    break;
+	}
     }
 }
