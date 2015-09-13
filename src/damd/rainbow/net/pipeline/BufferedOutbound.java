@@ -70,11 +70,11 @@ public class BufferedOutbound
 		src.limit (src.position () + output.remaining ());
 		output.put (src);
 		src.limit (prev_limit);
+
+		if (src.hasRemaining ()) // put remainder back on queue
+		    buffers.offerFirst (src);
 	    } else
 		output.put (src);
-
-	    if (src.hasRemaining ()) // put remainder back on queue
-		buffers.offerFirst (src);
 	}
     }
 }

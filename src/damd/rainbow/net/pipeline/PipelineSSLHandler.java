@@ -41,6 +41,7 @@ public class PipelineSSLHandler
     public PipelineSSLHandler ()
     {
 	logger = Logger.getLogger (getClass ().getName ());
+
 	key_mngrs = new ArrayList<> ();
 	trust_mngrs = new ArrayList<> ();
     }
@@ -77,6 +78,7 @@ public class PipelineSSLHandler
 
     public void closeNode ()
     {
+	// TODO: implement
     }
 
     // <<< PipelineNode
@@ -91,38 +93,20 @@ public class PipelineSSLHandler
     public void handleInbound (final ByteBuffer buffer)
 	throws Exception
     {
-	for (boolean keep_unwrapping = true;keep_unwrapping;) {
-	    final SSLEngineResult result;
+	final SSLEngineResult result;
 
-	    System.out.println ("before unwrap buffer("
-				+ buffer
-				+ ")\n\tinbound_buffer("
-				+ inbound_buffer
-				+")");
-	    result = engine.unwrap (buffer, inbound_buffer);
-	    System.out.println ("after unwrap buffer("
-				+ buffer
-				+ ")\n\tinbound_buffer("
-				+ inbound_buffer
-				+ ")\n\tresult("
-				+ result
-				+ ")");
-	    switch (result.getHandshakeStatus ()) {
-	    case NEED_TASK:
-		runDelegatedTasks (result);
-		keep_unwrapping = false;
-		break;
-	    case NEED_UNWRAP:
-		keep_unwrapping = true;
-		break;
-	    case NEED_WRAP:
-		source.handleTargetEvent (PipelineEvent.OUTBOUND_AVAILABLE);
-		keep_unwrapping = false;
-		break;
-	    default:
-		keep_unwrapping = false;
-		break;
-	    }
+	result = engine.unwrap (buffer, inbound_buffer);
+
+	switch (result.getHandshakeStatus ()) {
+	case NEED_TASK:
+	    runDelegatedTasks (result);
+	    break;
+	case NEED_UNWRAP:
+	    source.handleTargetEvent (PipelineEvent.NEED_INBOUND);
+	    break;
+	case NEED_WRAP:
+	    source.handleTargetEvent (PipelineEvent.OUTBOUND_AVAILABLE);
+	    break;
 	}
 
 	if (inbound_buffer.position () > 0) {
@@ -138,42 +122,28 @@ public class PipelineSSLHandler
     public void giveOutbound (final ByteBuffer buffer)
 	throws Exception
     {
-	final SSLEngineResult result;
-	final boolean target_has_data;
+	if (outbound_buffer.hasRemaining ())
+	    target.giveOutbound (outbound_buffer);
 
-	System.out.println ("before target.giveOutbound buffer("
-			    + buffer
-			    + ")\n\toutbound_buffer("
-			    + outbound_buffer
-			    + ")");
-	target.giveOutbound (outbound_buffer);
-	target_has_data = outbound_buffer.position () > 0;
-	System.out.println ("after target.giveOutbound buffer("
-			    + buffer
-			    + ")\n\toutbound_buffer("
-			    + outbound_buffer
-			    + ")\n\ttarget_has_data("
-			    + target_has_data
-			    + ")");
-
-	if (target_has_data)
-	    outbound_buffer.flip ();
+	outbound_buffer.flip ();
 
 	/* always run engine.wrap as it may produce data
 	   even if there is no data from the target */
 	try {
+	    final SSLEngineResult result;
+
 	    result = engine.wrap (outbound_buffer, buffer);
-	    System.out.println ("after wrap buffer("
-				+ buffer
-				+ ")\n\toutbound_buffer("
-				+ outbound_buffer
-				+ ")\n\tresult("
-				+ result
-				+ ")");
-	    runDelegatedTasks (result);
+
+	    switch (result.getHandshakeStatus ()) {
+	    case NEED_TASK:
+		runDelegatedTasks (result);
+		break;
+	    case NEED_UNWRAP:
+		source.handleTargetEvent (PipelineEvent.NEED_INBOUND);
+		break;
+	    }
 	} finally {
-	    if (target_has_data)
-		outbound_buffer.compact ();
+	    outbound_buffer.compact ();
 	}
     }
 

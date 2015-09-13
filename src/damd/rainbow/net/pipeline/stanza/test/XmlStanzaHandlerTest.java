@@ -1,5 +1,7 @@
 package damd.rainbow.net.pipeline.stanza.test;
 
+import java.io.FileInputStream;
+
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
@@ -10,6 +12,10 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 
 import java.nio.ByteBuffer;
+
+import java.security.KeyStore;
+
+import javax.net.ssl.KeyManagerFactory;
 
 import org.w3c.dom.Document;
 
@@ -24,6 +30,7 @@ import damd.rainbow.net.SocketHandlerFactory;
 
 import damd.rainbow.net.pipeline.Pipeline;
 import damd.rainbow.net.pipeline.PipelineSocketHandler;
+import damd.rainbow.net.pipeline.PipelineSSLHandler;
 
 import damd.rainbow.net.pipeline.stanza.XmlStanzaHandler;
 import damd.rainbow.net.pipeline.stanza.XmlStanzaDelegator;
@@ -38,11 +45,22 @@ public class XmlStanzaHandlerTest
 	private ExecutorService es = Executors.newCachedThreadPool ();
 
 	public SocketHandler createSocketHandler ()
+	    throws Exception
 	{
 	    final PipelineSocketHandler sh = new PipelineSocketHandler (es, es);
+	    final PipelineSSLHandler sslh = new PipelineSSLHandler ();
+	    final KeyStore ks = KeyStore.getInstance ("JKS");
+	    final KeyManagerFactory kmf = KeyManagerFactory
+		.getInstance ("SunX509");
+	    final char[] passphrase = "passphrase".toCharArray();
+
+	    ks.load (new FileInputStream ("/Users/dirk/testkeys"), passphrase);
+	    kmf.init(ks, passphrase);
+	    sslh.addKeyManagers (kmf.getKeyManagers ());
 
 	    new Pipeline ()
 		.add (sh)
+		.add (sslh)
 		.add (new XmlStanzaHandler (new XmlStanzaHandlerTest ()));
 
 	    return sh;
@@ -83,7 +101,7 @@ public class XmlStanzaHandlerTest
 
     public void handleStanza (final Document stanza)
     {
-	for (int i = 0;i < 1000;++i) {
+	for (int i = 0;i < 2;++i) {
 	    delegator.write ("<got>");
 	    delegator.write (stanza);
 	    delegator.write ("</got>");

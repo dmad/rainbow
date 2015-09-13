@@ -117,6 +117,7 @@ public class PipelineSocketHandler
     public synchronized void handleTargetEvent (final PipelineEvent event)
     {
 	switch (event) {
+	case NEED_INBOUND:
 	case OUTBOUND_AVAILABLE:
 	    if (null != select_future && !(select_future.isDone ()))
 		channel_selector.wakeup ();
@@ -218,9 +219,6 @@ public class PipelineSocketHandler
 	    IOException,
 	    Exception
     {
-	logger.entering (getClass ().getName (),
-			 "select");
-
 	final boolean no_target_future =
 	    null == target_future || target_future.isDone ();
 	boolean keep_going = pipeline.isUsable ();
@@ -231,6 +229,18 @@ public class PipelineSocketHandler
 	assert (keep_going);
 	if (!keep_going)
 	    return keep_going;
+
+	if (inbound_buffer.position () > 0) {
+	    inbound_buffer.flip ();
+	    try {
+		target.handleInbound (inbound_buffer);
+	    } catch (Throwable x) {
+		pipeline.invalidate
+		    ("While handling inbound", x);
+	    } finally {
+		inbound_buffer.compact ();
+	    }
+	}
 
 	if (outbound_buffer.hasRemaining ())
 	    target.giveOutbound (outbound_buffer);
@@ -252,46 +262,16 @@ public class PipelineSocketHandler
 
 	channel_selector.selectedKeys ().clear ();
 
-	System.out.println ("!!!!!!!! before select read("
-			    + read
-			    + ")\n\twrite("
-			    + write
-			    + ")\n\tinbound_buffer("
-			    + inbound_buffer
-			    + ")\n\toutbound_buffer("
-			    + outbound_buffer
-			    + ")");
-
-	if (no_target_future && inbound_buffer.position () > 0) {
-	    inbound_buffer.flip ();
-	    try {
-		target.handleInbound (inbound_buffer);
-	    } finally {
-		inbound_buffer.compact ();
-	    }
-	}
-
 	if (keep_going && channel_selector.select () > 0) {
-	    System.out.println ("after select readable("
-				+ selection_key.isReadable ()
-				+ ") writable("
-				+ selection_key.isWritable ()
-				+ ")");
 	    if (selection_key.isReadable ()) {
 		assert (no_target_future);
 		final int read_count;
 
-		System.out.println (">>>");
-		System.out.println ("before read inbound("
-				    + inbound_buffer + ")");
 		read_count = channel.read (inbound_buffer);
-		System.out.println ("after read read_count(" + read_count
-				    + ") inbound(" + inbound_buffer
-				    + ")");
 
 		if (read_count < 0) // end of stream
 		    keep_going = false;
-		else if (inbound_buffer.position () > 0) {
+		/*else if (inbound_buffer.position () > 0) {
 		    inbound_buffer.flip ();
 		    target_future = target_executor.submit
 			(new Runnable () {
@@ -309,7 +289,7 @@ public class PipelineSocketHandler
 				    }
 				}
 			    });
-		}
+			    }*/
 	    }
 
 	    if (selection_key.isWritable ()
@@ -322,9 +302,6 @@ public class PipelineSocketHandler
 		}
 	    }
 	}
-
-	logger.exiting (getClass ().getName (),
-			"select", keep_going);
 
 	return keep_going;
     }
