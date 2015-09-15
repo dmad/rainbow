@@ -23,6 +23,7 @@ import damd.rainbow.net.SocketListener;
 import damd.rainbow.net.SocketHandler;
 import damd.rainbow.net.SocketHandlerFactory;
 
+import damd.rainbow.net.pipeline.PipelineState;
 import damd.rainbow.net.pipeline.PipelineEvent;
 import damd.rainbow.net.pipeline.Pipeline;
 import damd.rainbow.net.pipeline.PipelineSource;
@@ -85,6 +86,11 @@ public class SSLHandlerTest
     public void setPipeline (final Pipeline pipeline)
     {
 	this.pipeline = pipeline;
+    }
+
+    public void stateHasChanged (final PipelineState new_state)
+    {
+	// We do not need to do anything an a pipepline state change
     }
 
     public void openNode (final short phase)

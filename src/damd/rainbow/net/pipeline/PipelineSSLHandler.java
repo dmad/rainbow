@@ -53,6 +53,11 @@ public class PipelineSSLHandler
 	this.pipeline = pipeline;
     }
 
+    public void stateHasChanged (final PipelineState new_state)
+    {
+	// We do not need to do anything an a pipepline state change
+    }
+
     public void openNode (final short phase)
 	throws
 	    NoSuchAlgorithmException,

@@ -47,14 +47,19 @@ public class Pipeline
 	return state;
     }
 
-    private synchronized void setState (final PipelineState state)
+    private void setState (final PipelineState state)
     {
-	logger.info ("Changing pipeline state from("
-		     + this.state
-		     + ") to ("
-		     + state + ")");
+	synchronized (this) {
+	    logger.info ("Changing pipeline state from("
+			 + this.state
+			 + ") to ("
+			 + state + ")");
 
-	this.state = state;
+	    this.state = state;
+	}
+
+	for (final PipelineNode node : nodes)
+	    node.stateHasChanged (state);
     }
 
     public synchronized boolean isUsable ()
@@ -141,14 +146,14 @@ public class Pipeline
 	       your sibling node(s)
 	       phase 1: do whatever you need to do with your siblings */
 	    for (short phase = 0;phase < 2;++phase)
-		for (int n = 0;n < nodes.size ();++n)
-		    nodes.get (n).openNode (phase);
+		for (final PipelineNode node : nodes)
+		    node.openNode (phase);
 
 	    setState (PipelineState.OPEN);
 	    nodes_have_been_closed = false;
 	} catch (Throwable x) {
-	    for (int n = 0;n < nodes.size ();++n)
-		nodes.get (n).closeNode ();
+	    for (final PipelineNode node : nodes)
+		node.closeNode ();
 	}
     }
 

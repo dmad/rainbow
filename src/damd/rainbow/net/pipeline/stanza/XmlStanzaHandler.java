@@ -82,11 +82,16 @@ public class XmlStanzaHandler
 
     // <<< PipelineTarget
 
-    // >>> PipelineTarget >>> PipelineNode
+    // >>> PipelineNode
 
     public void setPipeline (final Pipeline pipeline)
     {
 	this.pipeline = pipeline;
+    }
+
+    public void stateHasChanged (final PipelineState new_state)
+    {
+	// We do not need to do anything an a pipepline state change
     }
 
     public void openNode (final short phase)
@@ -99,6 +104,9 @@ public class XmlStanzaHandler
 	    parser = NioSaxParserFactory.getInstance ().newInstance ();
 	    parser.setHandler (this);
 	    parser.startDocument ();
+	    break;
+	case 1:
+	    delegate.streamIsReadyForWriting (); // notify delegate
 	    break;
 	}
     }
@@ -120,7 +128,7 @@ public class XmlStanzaHandler
 	delegate.cleanup ();
     }
 
-    // <<< PipelineTarget <<< PipelineNode
+    // <<< PipelineNode
 
     // >>> XmlStanzaDelegator
 

@@ -36,7 +36,7 @@ import damd.rainbow.net.pipeline.stanza.XmlStanzaHandler;
 import damd.rainbow.net.pipeline.stanza.XmlStanzaDelegator;
 import damd.rainbow.net.pipeline.stanza.XmlStanzaDelegate;
 
-public class XmlStanzaHandlerTest
+public class XmlStanzaHandlerServerTest
     implements XmlStanzaDelegate
 {
     private static class Factory
@@ -61,7 +61,7 @@ public class XmlStanzaHandlerTest
 	    new Pipeline ()
 		.add (sh)
 		.add (sslh)
-		.add (new XmlStanzaHandler (new XmlStanzaHandlerTest ()));
+		.add (new XmlStanzaHandler (new XmlStanzaHandlerServerTest ()));
 
 	    return sh;
 	}
@@ -72,7 +72,7 @@ public class XmlStanzaHandlerTest
     private XmlStanzaDelegator delegator;
     private String stream_tag;
 
-    public XmlStanzaHandlerTest ()
+    public XmlStanzaHandlerServerTest ()
     {
 	logger = Logger.getLogger (getClass ().getName ());
     }
@@ -82,6 +82,11 @@ public class XmlStanzaHandlerTest
     public void setDelegator (final XmlStanzaDelegator delegator)
     {
 	this.delegator = delegator;
+    }
+
+    public void streamIsReadyForWriting ()
+    {
+	// thanks for notifying us, but we do not need it
     }
 
     public boolean openStream (final String name, final Attributes attrs)
@@ -101,10 +106,12 @@ public class XmlStanzaHandlerTest
 
     public void handleStanza (final Document stanza)
     {
-	for (int i = 0;i < 2;++i) {
+	for (int i = 0;i < 500000;++i) {
 	    delegator.write ("<got>");
 	    delegator.write (stanza);
 	    delegator.write ("</got>");
+	    if (0 == i % 1000)
+		delegator.flush ();
 	}
 	delegator.flush ();
     }

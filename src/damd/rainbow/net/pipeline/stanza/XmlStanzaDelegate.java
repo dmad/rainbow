@@ -8,6 +8,8 @@ public interface XmlStanzaDelegate
 {
     public void setDelegator (XmlStanzaDelegator delegator);
 
+    public void streamIsReadyForWriting ();
+
     public boolean openStream (String name, Attributes attrs);
     public void closeStream ();
 

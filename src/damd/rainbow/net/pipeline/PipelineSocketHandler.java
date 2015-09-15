@@ -75,6 +75,13 @@ public class PipelineSocketHandler
 	this.pipeline = pipeline;
     }
 
+    public synchronized void stateHasChanged (final PipelineState new_state)
+    {
+	if (null != channel_selector
+	    && null != select_future && !(select_future.isDone ()))
+	    channel_selector.wakeup ();
+    }
+
     public synchronized void openNode (final short phase)
 	throws IOException
     {
@@ -214,13 +221,16 @@ public class PipelineSocketHandler
 	}
     }
 
+    private boolean isInboundBufferBeingProcessed ()
+    {
+	return null != target_future && !(target_future.isDone ());
+    }
+
     private boolean select ()
 	throws
 	    IOException,
 	    Exception
     {
-	final boolean no_target_future =
-	    null == target_future || target_future.isDone ();
 	boolean keep_going = pipeline.isUsable ();
 	boolean read = false, write = false;
 
@@ -230,16 +240,24 @@ public class PipelineSocketHandler
 	if (!keep_going)
 	    return keep_going;
 
-	if (inbound_buffer.position () > 0) {
-	    inbound_buffer.flip ();
-	    try {
-		target.handleInbound (inbound_buffer);
-	    } catch (Throwable x) {
-		pipeline.invalidate
-		    ("While handling inbound", x);
-	    } finally {
-		inbound_buffer.compact ();
-	    }
+	if (!isInboundBufferBeingProcessed ()
+	    && inbound_buffer.position () > 0) {
+	    target_future = target_executor.submit
+		(new Runnable () {
+			public void run ()
+			{
+			    inbound_buffer.flip ();
+			    try {
+				target.handleInbound (inbound_buffer);
+			    } catch (Throwable x) {
+				pipeline.invalidate
+				    ("While handling inbound", x);
+			    } finally {
+				inbound_buffer.compact ();
+				channel_selector.wakeup ();
+			    }
+			}
+		    });
 	}
 
 	if (outbound_buffer.hasRemaining ())
@@ -251,9 +269,9 @@ public class PipelineSocketHandler
 	    /* We do not read anymore, but we maybe we stil need to:
 	       - flush our outbound_buffer
 	       - wait for target_future to finish */
-	    if (!write && no_target_future)
+	    if (!write && !isInboundBufferBeingProcessed ())
 		keep_going = false;
-	} else if (no_target_future)
+	} else if (!isInboundBufferBeingProcessed ())
 	    read = true;
 
 	selection_key.interestOps
@@ -262,9 +280,10 @@ public class PipelineSocketHandler
 
 	channel_selector.selectedKeys ().clear ();
 
-	if (keep_going && channel_selector.select () > 0) {
+	if (keep_going
+	    && channel_selector.select (read || write ? 0 : 1000) > 0) {
 	    if (selection_key.isReadable ()) {
-		assert (no_target_future);
+		assert (!isInboundBufferBeingProcessed ());
 		final int read_count;
 
 		read_count = channel.read (inbound_buffer);

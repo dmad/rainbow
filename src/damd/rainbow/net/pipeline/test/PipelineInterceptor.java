@@ -4,6 +4,7 @@ import java.util.logging.Logger;
 
 import java.nio.ByteBuffer;
 
+import damd.rainbow.net.pipeline.PipelineState;
 import damd.rainbow.net.pipeline.PipelineEvent;
 import damd.rainbow.net.pipeline.Pipeline;
 import damd.rainbow.net.pipeline.PipelineSource;
@@ -31,6 +32,11 @@ public class PipelineInterceptor
     {
 	this.pipeline = pipeline;
 	logger.info ("setPipeline called");
+    }
+
+    public void stateHasChanged (final PipelineState new_state)
+    {
+	// We do not need to do anything an a pipepline state change
     }
 
     public void openNode (short phase)
