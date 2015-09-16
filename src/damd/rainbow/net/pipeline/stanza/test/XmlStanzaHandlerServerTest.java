@@ -110,8 +110,11 @@ public class XmlStanzaHandlerServerTest
 	    delegator.write ("<got>");
 	    delegator.write (stanza);
 	    delegator.write ("</got>");
-	    if (0 == i % 1000)
-		delegator.flush ();
+	    delegator.write ("<a>lkasjf;slfjlsjflawuerpoiqoruweqirpouweoquopurpoquwporuqipowurqwruioquwe"
+			     + "upqweiruopquwroeieuqwoprupqwourpowuroiqweuiporuwpoqrupwourpowurpowueporu"
+			     + "</a>");
+	    //if (0 == i % 10000)
+	    //	delegator.flush ();
 	}
 	delegator.flush ();
     }

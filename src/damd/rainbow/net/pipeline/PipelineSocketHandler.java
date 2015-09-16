@@ -271,6 +271,8 @@ public class PipelineSocketHandler
 	       - wait for target_future to finish */
 	    if (!write && !isInboundBufferBeingProcessed ())
 		keep_going = false;
+	    else
+		read = false;
 	} else if (!isInboundBufferBeingProcessed ())
 	    read = true;
 
@@ -282,6 +284,7 @@ public class PipelineSocketHandler
 
 	if (keep_going
 	    && channel_selector.select (read || write ? 0 : 1000) > 0) {
+
 	    if (selection_key.isReadable ()) {
 		assert (!isInboundBufferBeingProcessed ());
 		final int read_count;
@@ -290,25 +293,6 @@ public class PipelineSocketHandler
 
 		if (read_count < 0) // end of stream
 		    keep_going = false;
-		/*else if (inbound_buffer.position () > 0) {
-		    inbound_buffer.flip ();
-		    target_future = target_executor.submit
-			(new Runnable () {
-				public void run ()
-				{
-				    try {
-					target.handleInbound
-					    (inbound_buffer);
-				    } catch (Throwable x) {
-					pipeline.invalidate
-					    ("While handling input", x);
-				    } finally {
-					inbound_buffer.compact ();
-					channel_selector.wakeup ();
-				    }
-				}
-			    });
-			    }*/
 	    }
 
 	    if (selection_key.isWritable ()
