@@ -16,7 +16,7 @@ public class Pipeline
     {
 	logger = Logger.getLogger (getClass ().getName ());
 	nodes = new ArrayList<> (3);
-	setState (PipelineState.CLOSED);
+	state = PipelineState.CLOSED;
     }
 
     public synchronized Pipeline add (final PipelineNode node)
