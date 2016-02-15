@@ -21,9 +21,10 @@ public class PipelineInterceptor
     private PipelineSource source;
     private PipelineTarget target;
 
-    public PipelineInterceptor ()
+    public PipelineInterceptor (final String label)
     {
-	logger = Logger.getLogger (getClass ().getName ());
+	logger = Logger.getLogger (getClass ().getName ()
+				   + "#" + label);
     }
 
     // >>> PipelineNode
