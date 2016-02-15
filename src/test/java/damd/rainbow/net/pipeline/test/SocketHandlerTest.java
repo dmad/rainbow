@@ -41,7 +41,7 @@ public class SocketHandlerTest
 
 	new Pipeline ()
 	    .add (sh)
-	    .add (new PipelineInterceptor ())
+	    .add (new PipelineInterceptor ("raw"))
 	    .add (new SocketHandlerTest ());
 
 	return sh;

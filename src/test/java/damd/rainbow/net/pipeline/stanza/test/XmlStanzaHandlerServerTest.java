@@ -7,6 +7,8 @@ import java.util.concurrent.ExecutorService;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.logging.Handler;
+import java.util.logging.ConsoleHandler;
 
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -24,6 +26,8 @@ import org.xml.sax.Attributes;
 
 import damd.rainbow.behavior.Engine;
 
+import damd.rainbow.logging.DevLogFormatter;
+
 import damd.rainbow.net.SocketListener;
 import damd.rainbow.net.SocketHandler;
 import damd.rainbow.net.SocketHandlerFactory;
@@ -36,32 +40,47 @@ import damd.rainbow.net.pipeline.stanza.XmlStanzaHandler;
 import damd.rainbow.net.pipeline.stanza.XmlStanzaDelegator;
 import damd.rainbow.net.pipeline.stanza.XmlStanzaDelegate;
 
+import damd.rainbow.net.pipeline.test.PipelineInterceptor;
+
 public class XmlStanzaHandlerServerTest
     implements XmlStanzaDelegate
 {
     private static class Factory
 	implements SocketHandlerFactory
     {
+	private boolean ssl;
 	private ExecutorService es = Executors.newCachedThreadPool ();
+
+	public Factory (final boolean ssl)
+	{
+	    this.ssl = ssl;
+	}
 
 	public SocketHandler createSocketHandler ()
 	    throws Exception
 	{
+	    final Pipeline pipeline = new Pipeline ();
 	    final PipelineSocketHandler sh = new PipelineSocketHandler (es, es);
-	    final PipelineSSLHandler sslh = new PipelineSSLHandler ();
-	    final KeyStore ks = KeyStore.getInstance ("JKS");
-	    final KeyManagerFactory kmf = KeyManagerFactory
-		.getInstance ("SunX509");
-	    final char[] passphrase = "passphrase".toCharArray();
 
-	    ks.load (new FileInputStream ("/Users/dirk/testkeys"), passphrase);
-	    kmf.init(ks, passphrase);
-	    sslh.addKeyManagers (kmf.getKeyManagers ());
+	    pipeline.add (sh);
 
-	    new Pipeline ()
-		.add (sh)
-		.add (sslh)
-		.add (new XmlStanzaHandler (new XmlStanzaHandlerServerTest ()));
+	    if (ssl) {
+		final PipelineSSLHandler sslh = new PipelineSSLHandler ();
+		final KeyStore ks = KeyStore.getInstance ("JKS");
+		final KeyManagerFactory kmf = KeyManagerFactory
+		    .getInstance ("SunX509");
+		final char[] passphrase = "passphrase".toCharArray();
+
+		ks.load (new FileInputStream ("/Users/dirk/testkeys"),
+			 passphrase);
+		kmf.init(ks, passphrase);
+		sslh.addKeyManagers (kmf.getKeyManagers ());
+
+		pipeline.add (sslh);
+	    }
+
+	    pipeline.add (new XmlStanzaHandler
+			  (new XmlStanzaHandlerServerTest ()));
 
 	    return sh;
 	}
@@ -106,16 +125,9 @@ public class XmlStanzaHandlerServerTest
 
     public void handleStanza (final Document stanza)
     {
-	for (int i = 0;i < 500000;++i) {
-	    delegator.write ("<got>");
-	    delegator.write (stanza);
-	    delegator.write ("</got>");
-	    delegator.write ("<a>lkasjf;slfjlsjflawuerpoiqoruweqirpouweoquopurpoquwporuqipowurqwruioquwe"
-			     + "upqweiruopquwroeieuqwoprupqwourpowuroiqweuiporuwpoqrupwourpowurpowueporu"
-			     + "</a>");
-	    //if (0 == i % 10000)
-	    //	delegator.flush ();
-	}
+	delegator.write ("<got>");
+	delegator.write (stanza);
+	delegator.write ("</got>");
 	delegator.flush ();
     }
 
@@ -127,14 +139,31 @@ public class XmlStanzaHandlerServerTest
 
     public static void main (String[] args)
     {
-	Logger.getGlobal ().setLevel (Level.ALL);
+	{
+	    final Logger logger = Logger.getLogger ("");
+	    final Handler handler = new ConsoleHandler ();
+
+	    // Get rid of all handlers of the root logger
+	    for (final Handler h : logger.getHandlers ())
+		logger.removeHandler (h);
+
+	    handler.setFormatter (new DevLogFormatter ());
+	    handler.setLevel (Level.ALL); // default is INFO
+	    logger.addHandler (handler);
+
+	    logger.setLevel (Level.ALL);
+	}
 
 	try {
-	    SocketListener listener = new SocketListener ("test");
-	    listener.setListenerAddress (new InetSocketAddress ((InetAddress) null,
-								10000));
+	    final boolean ssl;
+	    final SocketListener listener = new SocketListener ("test");
 
-	    listener.setHandlerFactory (new Factory ());
+	    ssl = (1 == args.length && "--ssl".equals (args[0]));
+
+	    listener.setListenerAddress (new InetSocketAddress
+					 ((InetAddress) null, 10000));
+
+	    listener.setHandlerFactory (new Factory (ssl));
 	    listener.changeState (Engine.State.RUNNING);
 	    while (true) {
 		Thread.sleep (10000);
