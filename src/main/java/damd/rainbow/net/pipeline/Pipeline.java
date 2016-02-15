@@ -151,9 +151,10 @@ public class Pipeline
 
 	    setState (PipelineState.OPEN);
 	    nodes_have_been_closed = false;
-	} catch (Throwable x) {
+	} catch (final Throwable t) {
 	    for (final PipelineNode node : nodes)
 		node.closeNode ();
+	    throw new IllegalStateException ("While opening nodes", t);
 	}
     }
 

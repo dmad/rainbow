@@ -129,13 +129,14 @@ public class SocketListener
 		    }
 
 		    handler.open (schannel, this);
-		} catch (Exception x) {
+		} catch (final Throwable t) {
 		    logger.log (Level.SEVERE,
 				"While creating/opening SocketHandler("
 				+ handler
 				+ ")",
-				x);
+				t);
 		    removeHandler (handler);
+		    schannel.close ();
 		}
 	    }
 	} catch (AsynchronousCloseException x) {
