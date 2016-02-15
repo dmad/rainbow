@@ -4,8 +4,11 @@ import java.io.FileInputStream;
 
 import java.util.Arrays;
 
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -47,12 +50,20 @@ import damd.rainbow.net.pipeline.stanza.XmlStanzaDelegate;
 import damd.rainbow.net.pipeline.test.PipelineInterceptor;
 
 public class XmlStanzaHandlerClientTest
-    implements XmlStanzaDelegate
+    implements
+	XmlStanzaDelegate,
+	ThreadFactory
 {
     private XmlStanzaDelegator delegator;
 
     private String[] arguments;
     private String stream_tag;
+    private AtomicBoolean done;
+
+    private XmlStanzaHandlerClientTest ()
+    {
+	this.done = new AtomicBoolean (false);
+    }
 
     // >>> XmlStanzaDelegate
 
@@ -92,15 +103,29 @@ public class XmlStanzaHandlerClientTest
 
     public void cleanup ()
     {
+	done.set (true);
     }
 
     // <<< XmlStanzaDelegate
+
+    // >>> ThreadFactory
+
+    public Thread newThread (final Runnable r)
+    {
+	final Thread t = new Thread (r);
+
+	t.setDaemon (true);
+
+	return t;
+    }
+
+    // <<< ThreadFactory
 
     public void run (final String[] args)
 	throws Exception
     {
 	final Pipeline pipeline = new Pipeline ();
-	final ExecutorService es = Executors.newCachedThreadPool ();
+	final ExecutorService es = Executors.newCachedThreadPool (this);
 	final PipelineSocketHandler sh = new PipelineSocketHandler (es, es);
 	final SocketChannel channel;
 	final boolean ssl;
@@ -137,6 +162,9 @@ public class XmlStanzaHandlerClientTest
 	    (new InetSocketAddress ("localhost", 10000));
 
 	sh.open (channel, null);
+
+	while (!(done.get ()))
+	    Thread.sleep (1000);
     }
 
     public static void main (final String[] args)
