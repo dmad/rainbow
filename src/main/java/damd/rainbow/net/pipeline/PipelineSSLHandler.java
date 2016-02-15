@@ -168,6 +168,11 @@ public class PipelineSSLHandler
 
     // <<< PipelineSource
 
+    public void setClientMode (final boolean client_mode)
+    {
+	this.client_mode = client_mode;
+    }
+
     public void addKeyManagers (final KeyManager[] key_mngrs)
     {
 	for (final KeyManager key_mngr : key_mngrs)
