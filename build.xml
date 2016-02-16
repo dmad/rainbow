@@ -4,7 +4,7 @@
 	 default="all"
 	 basedir=".">
 
-  <property name="version.number" value="0.0.15"/>
+  <property name="version.number" value="0.1.16"/>
 
   <property name="deps.dir" value="deps"/>
 
@@ -15,12 +15,14 @@
   <property name="build.lib.dir" value="${build.dir}/lib"/>
 
   <path id="classpath">
-    <pathelement location="${deps.dir}/niosax-10.7.jar"/>
+    <pathelement location="${deps.dir}/niosax-10.7.2.jar"/>
   </path>
 
   <target name="prepare">
     <mkdir dir="${build.dir}"/>
     <mkdir dir="${build.classes.dir}"/>
+    <mkdir dir="${build.classes.dir}/main/java"/>
+    <mkdir dir="${build.classes.dir}/test/java"/>
     <mkdir dir="${build.lib.dir}"/>
   </target>
 
@@ -35,16 +37,16 @@
     <buildnumber/>
   </target>
 
-  <target name="compile"
+  <target name="compile-main"
 	  depends="prepare,bump-build-number"
 	  description="compiles all code">
-    <javac srcdir="${src.dir}"
-	   destdir="${build.classes.dir}"
+    <javac srcdir="${src.dir}/main/java"
+	   destdir="${build.classes.dir}/main/java"
 	   deprecation="true"
 	   debug="true"
 	   debuglevel="source,lines"
-	   source="1.7"
-	   target="1.7"
+	   source="1.8"
+	   target="1.8"
 	   includeantruntime="false">
       <compilerarg value="-Xlint"/>
       <include name="**"/>
@@ -54,11 +56,30 @@
      </javac>
   </target>
 
+  <target name="compile-test"
+	  depends="prepare,bump-build-number,compile-main"
+	  description="compiles all test code">
+    <javac srcdir="${src.dir}/test/java"
+	   destdir="${build.classes.dir}/test/java"
+	   deprecation="true"
+	   debug="true"
+	   debuglevel="source,lines"
+	   source="1.8"
+	   target="1.8"
+	   includeantruntime="false">
+      <compilerarg value="-Xlint"/>
+      <include name="**"/>
+      <classpath>
+	<pathelement location="${build.classes.dir}/main/java"/>
+      </classpath>
+    </javac>
+  </target>
+
   <target name="package"
-	  depends="compile"
+	  depends="compile-main"
 	  description="packages all classes into a jar file">
     <jar destfile="${build.lib.dir}/rainbow.jar"
-	 basedir="${build.classes.dir}">
+	 basedir="${build.classes.dir}/main/java">
       <manifest>
 	<attribute name="Built-By" value="${user.name}"/>
 	<attribute name="Implementation-Version"
@@ -68,7 +89,7 @@
   </target>
 
   <target name="all"
-	  depends="clean,package"
+	  depends="clean,package,compile-test"
 	  description="cleans, then builds everything"/>
 
 </project>

@@ -121,21 +121,22 @@ public class SocketListener
 
 		schannel = channel.accept (); // blocks
 
-		handler = handler_factory.createSocketHandler ();
-
-		synchronized (handlers) {
-		    handlers.add (handler);
-		}
-
 		try {
+		    handler = handler_factory.createSocketHandler ();
+
+		    synchronized (handlers) {
+			handlers.add (handler);
+		    }
+
 		    handler.open (schannel, this);
-		} catch (Exception x) {
+		} catch (final Throwable t) {
 		    logger.log (Level.SEVERE,
-				"While opening SocketHandler("
-				+ handler.toString ()
+				"While creating/opening SocketHandler("
+				+ handler
 				+ ")",
-				x);
+				t);
 		    removeHandler (handler);
+		    schannel.close ();
 		}
 	    }
 	} catch (AsynchronousCloseException x) {
