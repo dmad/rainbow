@@ -32,6 +32,8 @@ import damd.rainbow.net.SocketListener;
 import damd.rainbow.net.SocketHandler;
 import damd.rainbow.net.SocketHandlerFactory;
 
+import damd.rainbow.util.concurrent.DaemonThreadFactory;
+
 import damd.rainbow.net.pipeline.Pipeline;
 import damd.rainbow.net.pipeline.PipelineSocketHandler;
 import damd.rainbow.net.pipeline.PipelineSSLHandler;
@@ -49,7 +51,8 @@ public class XmlStanzaHandlerServerTest
 	implements SocketHandlerFactory
     {
 	private boolean ssl;
-	private ExecutorService es = Executors.newCachedThreadPool ();
+	private ExecutorService es = Executors
+	    .newCachedThreadPool (new DaemonThreadFactory ());
 
 	public Factory (final boolean ssl)
 	{

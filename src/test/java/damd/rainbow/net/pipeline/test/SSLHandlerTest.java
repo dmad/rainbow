@@ -32,6 +32,8 @@ import damd.rainbow.net.pipeline.PipelineSocketHandler;
 import damd.rainbow.net.pipeline.PipelineSSLHandler;
 import damd.rainbow.net.pipeline.BufferedOutbound;
 
+import damd.rainbow.util.concurrent.DaemonThreadFactory;
+
 public class SSLHandlerTest
     implements
 	SocketHandlerFactory,
@@ -43,6 +45,9 @@ public class SSLHandlerTest
     private PipelineSource source;
 
     private BufferedOutbound buffered_outbound;
+
+    private ExecutorService es = Executors
+	.newCachedThreadPool (new DaemonThreadFactory ());
 
     private SSLHandlerTest ()
     {
@@ -57,7 +62,6 @@ public class SSLHandlerTest
     public SocketHandler createSocketHandler ()
 	throws Exception
     {
-	final ExecutorService es = Executors.newCachedThreadPool ();
 	final PipelineSocketHandler sh = new PipelineSocketHandler (es, es);
 	final PipelineSSLHandler sslh = new PipelineSSLHandler ();
 	final KeyStore ks = KeyStore.getInstance ("JKS");

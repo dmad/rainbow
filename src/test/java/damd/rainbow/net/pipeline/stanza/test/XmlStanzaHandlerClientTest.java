@@ -4,7 +4,6 @@ import java.io.FileInputStream;
 
 import java.util.Arrays;
 
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 
@@ -49,10 +48,11 @@ import damd.rainbow.net.pipeline.stanza.XmlStanzaDelegate;
 
 import damd.rainbow.net.pipeline.test.PipelineInterceptor;
 
+import damd.rainbow.util.concurrent.DaemonThreadFactory;
+
 public class XmlStanzaHandlerClientTest
     implements
-	XmlStanzaDelegate,
-	ThreadFactory
+	XmlStanzaDelegate
 {
     private XmlStanzaDelegator delegator;
 
@@ -108,24 +108,12 @@ public class XmlStanzaHandlerClientTest
 
     // <<< XmlStanzaDelegate
 
-    // >>> ThreadFactory
-
-    public Thread newThread (final Runnable r)
-    {
-	final Thread t = new Thread (r);
-
-	t.setDaemon (true);
-
-	return t;
-    }
-
-    // <<< ThreadFactory
-
     public void run (final String[] args)
 	throws Exception
     {
 	final Pipeline pipeline = new Pipeline ();
-	final ExecutorService es = Executors.newCachedThreadPool (this);
+	final ExecutorService es = Executors
+	    .newCachedThreadPool (new DaemonThreadFactory ());
 	final PipelineSocketHandler sh = new PipelineSocketHandler (es, es);
 	final SocketChannel channel;
 	final boolean ssl;
