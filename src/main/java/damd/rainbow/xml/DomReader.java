@@ -95,8 +95,7 @@ public class DomReader
 
 	text = (null == sb ? null : sb.toString ());
 	if (null != text) {
-	    text = text.trim ();
-	    if (text.isEmpty ())
+	    if (text.trim ().isEmpty ())
 		text = null;
 	}
 

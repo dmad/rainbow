@@ -50,7 +50,7 @@ public class Pipeline
     private void setState (final PipelineState state)
     {
 	synchronized (this) {
-	    logger.info ("Changing pipeline state from("
+	    logger.fine ("Changing pipeline state from("
 			 + this.state
 			 + ") to ("
 			 + state + ")");
