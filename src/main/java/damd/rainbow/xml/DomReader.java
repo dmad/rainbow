@@ -105,6 +105,33 @@ public class DomReader
 	return text;
     }
 
+    public String getCData (final boolean mandatory)
+	throws XmlMissingValueException
+    {
+	StringBuilder sb = null;
+	String text;
+
+	for (Node child = current_element.getFirstChild ();
+	     null != child;
+	     child = child.getNextSibling ()) {
+	    if (Node.CDATA_SECTION_NODE == child.getNodeType ())
+		if (null == sb)
+		    sb = new StringBuilder (child.getNodeValue ());
+		else
+		    sb.append (child.getNodeValue ());
+	}
+
+
+	if (null != (text = (null == sb ? null : sb.toString ()))
+	    && text.trim ().isEmpty ())
+	    text = null;
+
+	if (mandatory && null == text)
+	    throw new XmlMissingValueException (current_element);
+
+	return text;
+    }
+
     public DomReader push ()
     {
 	if (null == bookmarks)
@@ -253,4 +280,8 @@ public class DomReader
 	return this;
     }
 
+    public DomReader getStanzaReader ()
+    {
+	return new DomReader (current_element);
+    }
 }
