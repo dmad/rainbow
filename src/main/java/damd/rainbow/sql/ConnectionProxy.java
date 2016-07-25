@@ -28,12 +28,12 @@ import java.sql.SQLNonTransientConnectionException;
 
 public class ConnectionProxy
     implements
-	Connection
+        Connection
 {
     public static class StatementInfo
     {
-	public Statement statement;
-	public StackTraceElement caller;
+        public Statement statement;
+        public StackTraceElement caller;
     }
 
     private ConnectionPool pool;
@@ -43,576 +43,576 @@ public class ConnectionProxy
 
     public ConnectionProxy (ConnectionPool pool, Connection connection)
     {
-	if (null == pool)
-	    throw new NullPointerException ("pool");
+        if (null == pool)
+            throw new NullPointerException ("pool");
 
-	if (null == connection)
-	    throw new NullPointerException ("connection");
+        if (null == connection)
+            throw new NullPointerException ("connection");
 
-	this.pool = pool;
-	this.connection = connection;
-	this.birth = System.currentTimeMillis ();
-	this.statements = new Vector<StatementInfo> ();
+        this.pool = pool;
+        this.connection = connection;
+        this.birth = System.currentTimeMillis ();
+        this.statements = new Vector<StatementInfo> ();
     }
 
     public synchronized int getAge ()
     {
-	return (int) ((System.currentTimeMillis () - birth) / 1000L);
+        return (int) ((System.currentTimeMillis () - birth) / 1000L);
     }
 
     // may only be called by ConnectionPool.*
     protected synchronized Connection detachConnection ()
     {
-	Connection conn = connection;
+        Connection conn = connection;
 
-	connection = null;
+        connection = null;
 
-	return conn;
+        return conn;
     }
 
     // may only be called by ConnectionPool.*
     protected synchronized List<StatementInfo> getOpenStatements ()
     {
-	Vector<StatementInfo> open = new Vector<StatementInfo> ();
+        Vector<StatementInfo> open = new Vector<StatementInfo> ();
 
-	for (StatementInfo si : statements) {
-	    try {
-		if (!(si.statement.isClosed ()))
-		    open.add (si);
-	    } catch (SQLException x) {
-		// isClosed is acting funny, add it to our list
-		open.add (si);
-	    }
-	}
+        for (StatementInfo si : statements) {
+            try {
+                if (!(si.statement.isClosed ()))
+                    open.add (si);
+            } catch (SQLException x) {
+                // isClosed is acting funny, add it to our list
+                open.add (si);
+            }
+        }
 
-	return open;
+        return open;
     }
 
     private synchronized void trackStatement (Statement stmt)
     {
-	if (null != stmt) {
-	    StatementInfo si = new StatementInfo ();
-	    StackTraceElement[] stack_trace;
+        if (null != stmt) {
+            StatementInfo si = new StatementInfo ();
+            StackTraceElement[] stack_trace;
 
-	    si.statement = stmt;
+            si.statement = stmt;
 
-	    stack_trace = Thread.currentThread ().getStackTrace ();
-	    /* 0 = Thread.getStackTrace ()
-	       1 = us (~ trackStatement)
-	       2 = ConnectionProxy.xxxStatement
-	       3 = caller
-	    */
-	    if (null != stack_trace && stack_trace.length > 3)
-		si.caller = stack_trace[3];
+            stack_trace = Thread.currentThread ().getStackTrace ();
+            /* 0 = Thread.getStackTrace ()
+               1 = us (~ trackStatement)
+               2 = ConnectionProxy.xxxStatement
+               3 = caller
+            */
+            if (null != stack_trace && stack_trace.length > 3)
+                si.caller = stack_trace[3];
 
-	    statements.add (si);
-	}
+            statements.add (si);
+        }
     }
 
     private synchronized void throwIfClosed ()
-	throws SQLNonTransientConnectionException
+        throws SQLNonTransientConnectionException
     {
-	if (null == connection)
-	    throw new SQLNonTransientConnectionException
-		("Unsupported operation on closed connection");
+        if (null == connection)
+            throw new SQLNonTransientConnectionException
+                ("Unsupported operation on closed connection");
     }
 
     private synchronized void throwIfClosedAsSQLClientInfoException ()
-	throws SQLClientInfoException
+        throws SQLClientInfoException
     {
-	try {
-	    throwIfClosed ();
-	} catch (SQLNonTransientConnectionException x) {
-	    SQLClientInfoException scix = new SQLClientInfoException ();
+        try {
+            throwIfClosed ();
+        } catch (SQLNonTransientConnectionException x) {
+            SQLClientInfoException scix = new SQLClientInfoException ();
 
-	    scix.initCause (x);
-	    throw scix;
-	}
+            scix.initCause (x);
+            throw scix;
+        }
     }
 
     // >>> Connection
 
     public void close ()
-	throws SQLException
+        throws SQLException
     {
-	/* if ConnectionPool monitor and ConnectionProxy monitor need
-	   to be locked in the same thread
-	   => first ConnectionPool then ConnectionProxy
-	   , that's why close MAY NOT be synchronized !!! */
-	pool.releaseConnection (this);
+        /* if ConnectionPool monitor and ConnectionProxy monitor need
+           to be locked in the same thread
+           => first ConnectionPool then ConnectionProxy
+           , that's why close MAY NOT be synchronized !!! */
+        pool.releaseConnection (this);
     }
 
     public synchronized boolean isClosed ()
-	throws SQLException
+        throws SQLException
     {
-	return null == connection;
+        return null == connection;
     }
 
     public synchronized Statement createStatement ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	Statement stmt = connection.createStatement ();
+        Statement stmt = connection.createStatement ();
 
-	trackStatement (stmt);
+        trackStatement (stmt);
 
-	return stmt;
+        return stmt;
     }
 
     public synchronized PreparedStatement prepareStatement (String sql)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	PreparedStatement stmt = connection.prepareStatement (sql);
+        PreparedStatement stmt = connection.prepareStatement (sql);
 
-	trackStatement (stmt);
+        trackStatement (stmt);
 
-	return stmt;
+        return stmt;
     }
 
     public synchronized CallableStatement prepareCall (String sql)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	CallableStatement stmt = connection.prepareCall (sql);
+        CallableStatement stmt = connection.prepareCall (sql);
 
-	trackStatement (stmt);
+        trackStatement (stmt);
 
-	return stmt;
+        return stmt;
     }
 
     public synchronized Statement createStatement (int resultSetType,
-						   int resultSetConcurrency)
-	throws SQLException
+                                                   int resultSetConcurrency)
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	Statement stmt = connection.createStatement (resultSetType,
-						     resultSetConcurrency);
+        Statement stmt = connection.createStatement (resultSetType,
+                                                     resultSetConcurrency);
 
-	trackStatement (stmt);
+        trackStatement (stmt);
 
-	return stmt;
+        return stmt;
     }
 
     public synchronized PreparedStatement prepareStatement
-	(String sql,
-	 int resultSetType,
-	 int resultSetConcurrency)
-	throws SQLException
+        (String sql,
+         int resultSetType,
+         int resultSetConcurrency)
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	PreparedStatement stmt;
+        PreparedStatement stmt;
 
-	stmt = connection.prepareStatement (sql,
-					    resultSetType,
-					    resultSetConcurrency);
-	trackStatement (stmt);
+        stmt = connection.prepareStatement (sql,
+                                            resultSetType,
+                                            resultSetConcurrency);
+        trackStatement (stmt);
 
-	return stmt;
+        return stmt;
     }
 
     public synchronized CallableStatement prepareCall (String sql,
-						       int resultSetType,
-						       int resultSetConcurrency)
-	throws SQLException
+                                                       int resultSetType,
+                                                       int resultSetConcurrency)
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	CallableStatement stmt = connection.prepareCall (sql,
-							 resultSetType,
-							 resultSetConcurrency);
+        CallableStatement stmt = connection.prepareCall (sql,
+                                                         resultSetType,
+                                                         resultSetConcurrency);
 
-	trackStatement (stmt);
+        trackStatement (stmt);
 
-	return stmt;
+        return stmt;
     }
 
     public synchronized Statement createStatement (int resultSetType,
-						   int resultSetConcurrency,
-						   int resultSetHoldability)
-	throws SQLException
+                                                   int resultSetConcurrency,
+                                                   int resultSetHoldability)
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	Statement stmt = connection.createStatement (resultSetType,
-						     resultSetConcurrency,
-						     resultSetHoldability);
+        Statement stmt = connection.createStatement (resultSetType,
+                                                     resultSetConcurrency,
+                                                     resultSetHoldability);
 
-	trackStatement (stmt);
+        trackStatement (stmt);
 
-	return stmt;
+        return stmt;
     }
 
     public synchronized PreparedStatement prepareStatement
-	(String sql,
-	 int resultSetType,
-	 int resultSetConcurrency,
-	 int resultSetHoldability)
-	throws SQLException
+        (String sql,
+         int resultSetType,
+         int resultSetConcurrency,
+         int resultSetHoldability)
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	PreparedStatement stmt;
+        PreparedStatement stmt;
 
-	stmt = connection.prepareStatement (sql, resultSetType,
-					    resultSetConcurrency,
-					    resultSetHoldability);
-	trackStatement (stmt);
+        stmt = connection.prepareStatement (sql, resultSetType,
+                                            resultSetConcurrency,
+                                            resultSetHoldability);
+        trackStatement (stmt);
 
-	return stmt;
+        return stmt;
     }
 
     public synchronized CallableStatement prepareCall (String sql,
-						       int resultSetType,
-						       int resultSetConcurrency,
-						       int resultSetHoldability)
-	throws SQLException
+                                                       int resultSetType,
+                                                       int resultSetConcurrency,
+                                                       int resultSetHoldability)
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	CallableStatement stmt = connection.prepareCall (sql, resultSetType,
-							 resultSetConcurrency,
-							 resultSetHoldability);
+        CallableStatement stmt = connection.prepareCall (sql, resultSetType,
+                                                         resultSetConcurrency,
+                                                         resultSetHoldability);
 
-	trackStatement (stmt);
+        trackStatement (stmt);
 
-	return stmt;
+        return stmt;
     }
 
     public synchronized PreparedStatement prepareStatement
-	(String sql,
-	 int autoGeneratedKeys)
-	throws SQLException
+        (String sql,
+         int autoGeneratedKeys)
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	PreparedStatement stmt;
+        PreparedStatement stmt;
 
-	stmt = connection.prepareStatement (sql,
-					    autoGeneratedKeys);
-	trackStatement (stmt);
+        stmt = connection.prepareStatement (sql,
+                                            autoGeneratedKeys);
+        trackStatement (stmt);
 
-	return stmt;
+        return stmt;
     }
 
     public synchronized PreparedStatement prepareStatement (String sql,
-							    int[] columnIndexes)
-	throws SQLException
+                                                            int[] columnIndexes)
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	PreparedStatement stmt = connection.prepareStatement (sql,
-							      columnIndexes);
+        PreparedStatement stmt = connection.prepareStatement (sql,
+                                                              columnIndexes);
 
-	trackStatement (stmt);
+        trackStatement (stmt);
 
-	return stmt;
+        return stmt;
     }
 
     public synchronized PreparedStatement prepareStatement
-	(String sql,
-	 String[] columnNames)
-	throws SQLException
+        (String sql,
+         String[] columnNames)
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	PreparedStatement stmt = connection.prepareStatement (sql, columnNames);
+        PreparedStatement stmt = connection.prepareStatement (sql, columnNames);
 
-	trackStatement (stmt);
+        trackStatement (stmt);
 
-	return stmt;
+        return stmt;
     }
 
     // Forwarders
 
     public synchronized void setAutoCommit (boolean autoCommit)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.setAutoCommit (autoCommit);
+        connection.setAutoCommit (autoCommit);
     }
 
     public synchronized String nativeSQL (String sql)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.nativeSQL (sql);
+        return connection.nativeSQL (sql);
     }
 
     public synchronized boolean getAutoCommit ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.getAutoCommit ();
+        return connection.getAutoCommit ();
     }
 
     public synchronized void commit ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.commit ();
+        connection.commit ();
     }
 
     public synchronized void rollback ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.rollback ();
+        connection.rollback ();
     }
 
     public synchronized DatabaseMetaData getMetaData ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.getMetaData ();
+        return connection.getMetaData ();
     }
 
     public synchronized void setReadOnly (boolean readOnly)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.setReadOnly (readOnly);
+        connection.setReadOnly (readOnly);
     }
 
     public synchronized boolean isReadOnly ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.isReadOnly ();
+        return connection.isReadOnly ();
     }
 
     public synchronized void setCatalog (String catalog)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.setCatalog (catalog);
+        connection.setCatalog (catalog);
     }
 
     public synchronized String getCatalog ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.getCatalog ();
+        return connection.getCatalog ();
     }
 
     public synchronized void setTransactionIsolation (int level)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.setTransactionIsolation (level);
+        connection.setTransactionIsolation (level);
     }
 
     public synchronized int getTransactionIsolation ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.getTransactionIsolation ();
+        return connection.getTransactionIsolation ();
     }
 
     public synchronized SQLWarning getWarnings ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.getWarnings ();
+        return connection.getWarnings ();
     }
 
     public synchronized void clearWarnings ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.clearWarnings ();
+        connection.clearWarnings ();
     }
 
     public synchronized Map<String, Class<?>> getTypeMap ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.getTypeMap ();
+        return connection.getTypeMap ();
     }
 
     public synchronized void setTypeMap (Map<String, Class<?>> map)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.setTypeMap (map);
+        connection.setTypeMap (map);
     }
 
     public synchronized void setHoldability (int holdability)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.setHoldability (holdability);
+        connection.setHoldability (holdability);
     }
 
     public synchronized int getHoldability ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.getHoldability ();
+        return connection.getHoldability ();
     }
 
     public synchronized Savepoint setSavepoint ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.setSavepoint ();
+        return connection.setSavepoint ();
     }
 
     public synchronized Savepoint setSavepoint (String name)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.setSavepoint (name);
+        return connection.setSavepoint (name);
     }
 
     public synchronized void rollback (Savepoint savepoint)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.rollback (savepoint);
+        connection.rollback (savepoint);
     }
 
     public synchronized void releaseSavepoint (Savepoint savepoint)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.releaseSavepoint (savepoint);
+        connection.releaseSavepoint (savepoint);
     }
 
     // Since: 1.6
 
     public synchronized Clob createClob ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.createClob ();
+        return connection.createClob ();
     }
 
     public synchronized Blob createBlob ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.createBlob ();
+        return connection.createBlob ();
     }
 
     public synchronized NClob createNClob ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.createNClob ();
+        return connection.createNClob ();
     }
 
     public synchronized SQLXML createSQLXML ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.createSQLXML ();
+        return connection.createSQLXML ();
     }
 
     public synchronized boolean isValid (int timeout)
-	throws SQLException
+        throws SQLException
     {
-	return null != connection && connection.isValid (timeout);
+        return null != connection && connection.isValid (timeout);
     }
 
     public synchronized void setClientInfo (String name,
-					    String value)
-	throws SQLClientInfoException
+                                            String value)
+        throws SQLClientInfoException
     {
-	throwIfClosedAsSQLClientInfoException ();
+        throwIfClosedAsSQLClientInfoException ();
 
-	connection.setClientInfo (name, value);
+        connection.setClientInfo (name, value);
     }
 
     public synchronized void setClientInfo (Properties properties)
-	throws SQLClientInfoException
+        throws SQLClientInfoException
     {
-	throwIfClosedAsSQLClientInfoException ();
+        throwIfClosedAsSQLClientInfoException ();
 
-	connection.setClientInfo (properties);
+        connection.setClientInfo (properties);
     }
 
     public synchronized String getClientInfo (String name)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.getClientInfo (name);
+        return connection.getClientInfo (name);
     }
 
     public synchronized Properties getClientInfo ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.getClientInfo ();
+        return connection.getClientInfo ();
     }
 
     public synchronized Array createArrayOf (String typeName,
-					     Object[] elements)
-	throws SQLException
+                                             Object[] elements)
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.createArrayOf (typeName, elements);
+        return connection.createArrayOf (typeName, elements);
     }
 
     public synchronized Struct createStruct (String typeName,
-					     Object[] attributes)
-	throws SQLException
+                                             Object[] attributes)
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.createStruct (typeName, attributes);
+        return connection.createStruct (typeName, attributes);
     }
 
     // >>> Connection >>> Wrapper (since 1.6)
 
     public synchronized boolean isWrapperFor (Class<?> iface)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.isWrapperFor (iface);
+        return connection.isWrapperFor (iface);
     }
 
     public synchronized <T> T unwrap (Class<T> iface)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.unwrap (iface);
+        return connection.unwrap (iface);
     }
 
     // <<< Connection >>> Wrapper
@@ -620,44 +620,44 @@ public class ConnectionProxy
     // Since 1.7
 
     public synchronized void setSchema (String schema)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.setSchema (schema);
+        connection.setSchema (schema);
     }
 
     public synchronized String getSchema ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.getSchema ();
+        return connection.getSchema ();
     }
 
     public synchronized void abort (Executor executor)
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.abort (executor);
+        connection.abort (executor);
     }
 
     public synchronized void setNetworkTimeout (Executor executor,
-				   int milliseconds)
-	throws SQLException
+                                   int milliseconds)
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	connection.setNetworkTimeout (executor, milliseconds);
+        connection.setNetworkTimeout (executor, milliseconds);
     }
 
     public synchronized int getNetworkTimeout ()
-	throws SQLException
+        throws SQLException
     {
-	throwIfClosed ();
+        throwIfClosed ();
 
-	return connection.getNetworkTimeout ();
+        return connection.getNetworkTimeout ();
     }
 
     // <<< Connection
