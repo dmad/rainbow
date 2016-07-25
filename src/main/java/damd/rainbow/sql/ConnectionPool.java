@@ -25,6 +25,28 @@ public class ConnectionPool
         Runnable,
         Engine
 {
+    private static class AvailableConnection
+    {
+        private Connection conn;
+        private long last_used; // in milliseconds (see: System.currentTimeMillis ())
+
+        public AvailableConnection (final Connection conn)
+        {
+            this.conn = conn;
+            last_used = System.currentTimeMillis ();
+        }
+
+        public Connection getConnection ()
+        {
+            return conn;
+        }
+
+        public int getIdleTime ()
+        {
+            return (int) ((System.currentTimeMillis () - last_used) / 1000L);
+        }
+    }
+
     private Logger logger;
 
     private String name;
@@ -38,9 +60,10 @@ public class ConnectionPool
     private int maximum_capacity;
     private int capacity_increment;
 
-    private int timeout; // in seconds (<= 0 ~ no timeout)
+    private int reclaim_timeout; // in seconds (<= 0 ~ no timeout)
+    private int retire_timeout; // in seconds (<= 0 ~ no timeout)
 
-    private List<Connection> available_connections;
+    private List<AvailableConnection> available_connections;
     private List<ConnectionProxy> used_connections;
 
     private Thread worker;
@@ -49,7 +72,8 @@ public class ConnectionPool
     {
         setName (null);
 
-        timeout = 0; // ~ no timeout
+        reclaim_timeout = 0; // ~ no timeout
+        retire_timeout = 0; // ~ no timeout
 
         initial_capacity = 1;
         maximum_capacity = Integer.MAX_VALUE;
@@ -175,18 +199,36 @@ public class ConnectionPool
         this.properties = prop_copy;
     }
 
-    public synchronized int getTimeout ()
+    public synchronized int getReclaimTimeout ()
     {
-        return timeout;
+        return reclaim_timeout;
     }
 
-    public synchronized void setTimeout (int timeout)
+    public synchronized void setReclaimTimeout (final int timeout)
     {
-        logger.fine ("Setting timeout to ("
+        logger.fine ("Setting reclaim_timeout to ("
                      + timeout
+                     + " sec) was ("
+                     + reclaim_timeout
                      + " sec)");
 
-        this.timeout = timeout;
+        reclaim_timeout = timeout;
+    }
+
+    public synchronized int getRetireTimeout ()
+    {
+        return retire_timeout;
+    }
+
+    public synchronized void setRetireTimeout (final int timeout)
+    {
+        logger.fine ("Setting retire_timeout to ("
+                     + timeout
+                     + " sec) was ("
+                     + retire_timeout
+                     + " sec)");
+
+        retire_timeout = timeout;
     }
 
     public synchronized int getInitialCapacity ()
@@ -255,7 +297,7 @@ public class ConnectionPool
 
     // <<< Named
 
-    private synchronized void addConnections (int count)
+    private synchronized void addConnections (final int count)
         throws SQLException
     {
         logger.info ("Adding "
@@ -265,14 +307,14 @@ public class ConnectionPool
                         + used_connections.size ()));
 
         for (int i = 0;i < count;++i) {
-            Connection conn = driver.connect (url, properties);
+            final Connection conn = driver.connect (url, properties);
 
             conn.setAutoCommit (false);
-            available_connections.add (conn);
+            available_connections.add (new AvailableConnection (conn));
         }
     }
 
-    private void discardConnection (Connection conn)
+    private void discardConnection (final Connection conn)
     {
         if (null != conn) {
             try {
@@ -283,7 +325,7 @@ public class ConnectionPool
         }
     }
 
-    private boolean isConnectionValid (Connection conn)
+    private boolean isConnectionValid (final Connection conn)
     {
         boolean valid = false;
 
@@ -325,7 +367,8 @@ public class ConnectionPool
 
                 addConnections (increment);
             } else {
-                Connection conn = available_connections.remove (0);
+                final Connection conn = available_connections.remove (0)
+                    .getConnection ();
 
                 if (isConnectionValid (conn)) {
                     proxy = new ConnectionProxy (this, conn);
@@ -390,7 +433,7 @@ public class ConnectionPool
 
         try {
             conn.rollback ();
-            available_connections.add (conn);
+            available_connections.add (new AvailableConnection (conn));
         } catch (SQLException x) {
             logger.log (Level.WARNING,
                         "While performing rollback on released connection", x);
@@ -405,24 +448,42 @@ public class ConnectionPool
                      + "))");
     }
 
-    private synchronized void reapConnections ()
+    private synchronized void reclaimUsedConnections ()
     {
-        if (timeout > 0) {
+        if (reclaim_timeout > 0) {
             List<ConnectionProxy> proxies;
 
             proxies = new ArrayList<> (used_connections);
             for (ConnectionProxy proxy : proxies) {
-                if (proxy.getAge () > timeout) {
+                if (proxy.getAge () > reclaim_timeout) {
                     logger.warning ("Connection has timed out ("
                                     + proxy.getAge ()
-                                    + " sec), releasing it");
+                                    + " sec), reclaiming it");
                     try {
                         releaseConnection (proxy);
                     } catch (SQLException x) {
                         logger.log (Level.SEVERE,
-                                    "While releasing timed out connection",
+                                    "While reclaiming timed out connection",
                                     x);
                     }
+                }
+            }
+        }
+    }
+
+    private synchronized void retireUnusedConnections ()
+    {
+        if (retire_timeout > 0) {
+            final List<AvailableConnection> conns
+                = new ArrayList<> (available_connections);
+
+            for (final AvailableConnection ac : conns) {
+                if (ac.getIdleTime () > retire_timeout) {
+                    logger.info ("Connection has not been used for("
+                                 + ac.getIdleTime ()
+                                 + " sec), retiring it");
+                    available_connections.remove (ac);
+                    discardConnection (ac.getConnection ());
                 }
             }
         }
@@ -439,7 +500,8 @@ public class ConnectionPool
         while (running) {
             try {
                 while (true) {
-                    reapConnections ();
+                    reclaimUsedConnections ();
+                    retireUnusedConnections ();
                     Thread.sleep (1000);
                 }
             } catch (InterruptedException x) {
@@ -502,15 +564,16 @@ public class ConnectionPool
 
                 // Reclaim all used connections
                 for (ConnectionProxy p : used_connections) {
-                    Connection conn = p.detachConnection ();
+                    final Connection conn = p.detachConnection ();
 
                     if (null != conn)
-                        available_connections.add (conn);
+                        available_connections.add
+                            (new AvailableConnection (conn));
                 }
                 used_connections.clear ();
 
-                for (Connection c : available_connections)
-                    discardConnection (c);
+                for (final AvailableConnection ac : available_connections)
+                    discardConnection (ac.getConnection ());
 
                 available_connections.clear ();
 
