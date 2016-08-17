@@ -3,9 +3,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>damd</groupId>
+    <groupId>damd.rainbow</groupId>
     <artifactId>rainbow</artifactId>
-    <version>0.0.20</version>
+    <version>0.0.21</version>
     <packaging>jar</packaging>
 
     <name>rainbow</name>
@@ -65,11 +65,9 @@
 
     <dependencies>
         <dependency>
-            <groupId>niosax</groupId>
-            <artifactId>com.dhl.secops</artifactId>
-            <version>10.7.2</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/deps/niosax-10.7.2.jar</systemPath>
+            <groupId>damd.niosax</groupId>
+            <artifactId>niosax</artifactId>
+            <version>10.7.3</version>
         </dependency>
     </dependencies>
 </project>
