@@ -163,15 +163,20 @@ public class DomReader
 
     public boolean tryMoveToParent ()
     {
-	boolean found = true;
-	Node parent = current_element.getParentNode ();
+        boolean found = false;
 
-	if (Node.ELEMENT_NODE == parent.getNodeType ())
-	    current_element = (Element) parent;
-	else
-	    found = false;
+        if (current_element != root_element) { /* we are not allowed to go above our root
+                                                  even if it exists */
+            final Node parent = current_element.getParentNode ();
 
-	return found;
+            if (null != parent
+                && Node.ELEMENT_NODE == parent.getNodeType ()) {
+                current_element = (Element) parent;
+                found = true;
+            }
+        }
+
+        return found;
     }
 
    public DomReader moveToParent ()
