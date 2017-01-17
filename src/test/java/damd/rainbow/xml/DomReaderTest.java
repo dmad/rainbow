@@ -4,14 +4,14 @@ import static org.hamcrest.CoreMatchers.*;
 
 import org.junit.Test;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertThat;
 
 import org.w3c.dom.Document;
 
 public class DomReaderTest
 {
     @Test
-    public void breakingOutOfStanza ()
+    public void breakingOutOfStanzaIsNotAllowed ()
         throws Exception
     {
         final Document doc = new DomBuilder ("root")
@@ -32,10 +32,10 @@ public class DomReaderTest
         stanza.moveToChild ();
         assertThat (stanza.getName (), is (equalTo ("child2")));
 
-        assertTrue (stanza.tryMoveToParent ()); // child1
+        assertThat (stanza.tryMoveToParent (), is (true)); // child1
         assertThat (stanza.getName (), is (equalTo ("child1")));
 
         // we should *not* be able to go above child1
-        assertFalse (stanza.tryMoveToParent ());
+        assertThat (stanza.tryMoveToParent (), is (false));
     }
 }
