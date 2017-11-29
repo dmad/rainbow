@@ -52,6 +52,10 @@ public class PipelineSocketHandler
 
     // <<< select thread
 
+    // Windows implementation for Selector has a race-condition in their version of wakeup/select
+    // We use selectNow in combination with Thread.sleep() as a workaround
+    private boolean usesWindowsSelectorImpl;
+
     public PipelineSocketHandler (final ExecutorService select_executor,
 				  final ExecutorService target_executor)
     {
@@ -75,11 +79,13 @@ public class PipelineSocketHandler
 	this.pipeline = pipeline;
     }
 
-    public synchronized void stateHasChanged (final PipelineState new_state)
+    public synchronized void stateHasChanged(final PipelineState new_state)
     {
-	if (null != channel_selector
-	    && null != select_future && !(select_future.isDone ()))
-	    channel_selector.wakeup ();
+        if (!usesWindowsSelectorImpl) {
+            if (null != channel_selector
+                && null != select_future && !(select_future.isDone ()))
+                channel_selector.wakeup ();
+        }
     }
 
     public synchronized void openNode (final short phase)
@@ -94,8 +100,10 @@ public class PipelineSocketHandler
 	    outbound_buffer = ByteBuffer.allocateDirect (20480);
 
 	    channel_selector = Selector.open ();
-	    selection_key = channel.register (channel_selector,
-					      SelectionKey.OP_READ);
+                selection_key = channel.register(channel_selector, SelectionKey.OP_READ);
+
+                if ("sun.nio.ch.WindowsSelectorImpl".equals(channel_selector.getClass().getName()))
+                    usesWindowsSelectorImpl = true;
 	    break;
 	case 1:
 	    select_future = select_executor.submit (this);
@@ -121,13 +129,14 @@ public class PipelineSocketHandler
 	this.target = target;
     }
 
-    public synchronized void handleTargetEvent (final PipelineEvent event)
+    public synchronized void handleTargetEvent(final PipelineEvent event)
     {
 	switch (event) {
 	case NEED_INBOUND:
 	case OUTBOUND_AVAILABLE:
 	    if (null != select_future && !(select_future.isDone ()))
-		channel_selector.wakeup ();
+                if (!usesWindowsSelectorImpl)
+                    channel_selector.wakeup ();
 	    break;
 	}
     }
@@ -227,10 +236,7 @@ public class PipelineSocketHandler
     }
 
     private boolean select ()
-	throws
-	    IOException,
-	    Exception
-    {
+            throws Exception {
 	boolean keep_going = pipeline.isUsable ();
 	boolean read = false, write = false;
 
@@ -242,10 +248,7 @@ public class PipelineSocketHandler
 
 	if (!isInboundBufferBeingProcessed ()
 	    && inbound_buffer.position () > 0) {
-	    target_future = target_executor.submit
-		(new Runnable () {
-			public void run ()
-			{
+            target_future = target_executor.submit(() -> {
 			    inbound_buffer.flip ();
 			    try {
 				target.handleInbound (inbound_buffer);
@@ -254,9 +257,9 @@ public class PipelineSocketHandler
 				    ("While handling inbound", x);
 			    } finally {
 				inbound_buffer.compact ();
+                    if (!usesWindowsSelectorImpl)
 				channel_selector.wakeup ();
 			    }
-			}
 		    });
 	}
 
@@ -266,7 +269,7 @@ public class PipelineSocketHandler
 	write = outbound_buffer.position () > 0;
 
 	if (PipelineState.CLOSING == pipeline.getState ()) {
-	    /* We do not read anymore, but we maybe we stil need to:
+	    /* We do not read anymore, but maybe we stil need to:
 	       - flush our outbound_buffer
 	       - wait for target_future to finish */
 	    if (!write && !isInboundBufferBeingProcessed ())
@@ -278,13 +281,12 @@ public class PipelineSocketHandler
 
 	selection_key.interestOps
 	    ((read ? SelectionKey.OP_READ : 0)
-	     + (write ? SelectionKey.OP_WRITE : 0));
+                        | (write ? SelectionKey.OP_WRITE : 0));
 
 	channel_selector.selectedKeys ().clear ();
 
 	if (keep_going
-	    && channel_selector.select (read || write ? 0 : 1000) > 0) {
-
+                && (usesWindowsSelectorImpl ? channel_selector.selectNow() : channel_selector.select(read || write ? 0 : 1000)) > 0) {
 	    if (selection_key.isReadable ()) {
 		assert (!isInboundBufferBeingProcessed ());
 		final int read_count;
@@ -304,6 +306,9 @@ public class PipelineSocketHandler
 		    outbound_buffer.compact ();
 		}
 	    }
+        } else {
+            if (usesWindowsSelectorImpl)
+                Thread.sleep(100);
 	}
 
 	return keep_going;
