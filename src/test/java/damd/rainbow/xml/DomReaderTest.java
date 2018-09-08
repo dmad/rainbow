@@ -1,10 +1,8 @@
 package damd.rainbow.xml;
 
-import static org.hamcrest.CoreMatchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import org.junit.Test;
-
-import static org.junit.Assert.assertThat;
+import org.junit.jupiter.api.Test;
 
 import org.w3c.dom.Document;
 
@@ -24,18 +22,18 @@ public class DomReaderTest
             final DomReader reader = new DomReader (doc);
 
             reader.moveToChild ();
-            assertThat (reader.getName (), is (equalTo ("child1")));
+            assertEquals (reader.getName (), "child1");
 
             stanza = reader.getStanzaReader (); // stanza is rooted at "child1"
         }
 
         stanza.moveToChild ();
-        assertThat (stanza.getName (), is (equalTo ("child2")));
+        assertEquals (stanza.getName (), "child2");
 
-        assertThat (stanza.tryMoveToParent (), is (true)); // child1
-        assertThat (stanza.getName (), is (equalTo ("child1")));
+        assertEquals (stanza.tryMoveToParent (), true); // child 1
+        assertEquals (stanza.getName (), "child1");
 
         // we should *not* be able to go above child1
-        assertThat (stanza.tryMoveToParent (), is (false));
+        assertEquals (stanza.tryMoveToParent (), false);
     }
 }
